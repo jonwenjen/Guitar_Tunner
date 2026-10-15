@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Strobe Tuner</title>
+  <meta name="description" content="A true-strobe guitar tuner with sweetened tunings, automatic string detection and a library of standard, open and alternate tunings.">
+  <meta name="theme-color" content="#3a2517">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="preload" href="fonts/saira-var.woff" as="font" type="font/woff" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to tuner</a>
+  <div class="app" data-view="tune">
+    <header class="topbar">
+      <div class="brand" aria-hidden="true">
+        <svg viewBox="0 0 32 32" class="brand-mark"><circle cx="16" cy="16" r="15"/><path d="M16 1v30M1 16h30M5.4 5.4l21.2 21.2M26.6 5.4 5.4 26.6"/></svg>
+        <span>Strobe Tuner</span>
+      </div>
+      <button class="tuning-title" id="tuningTitle" type="button" data-goto="tunings">
+        <span class="tuning-name" id="tuningName">Standard</span>
+        <span class="tuning-notes" id="tuningNotes">E A D G B E</span>
+      </button>
+      <div class="chips">
+        <button class="chip" id="chipSweet" type="button" data-goto="sweeten">Equal</button>
+        <button class="chip" id="chipA4" type="button" data-goto="settings">A4 440</button>
+      </div>
+      <nav class="tabs" aria-label="Sections">
+        <button type="button" data-tab="tune" aria-current="page">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>Tune</span></button>
+        <button type="button" data-tab="tunings">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/><circle cx="8" cy="6" r="1.6"/><circle cx="15" cy="10" r="1.6"/><circle cx="10" cy="14" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg><span>Tunings</span></button>
+        <button type="button" data-tab="sweeten">
+          <svg viewBox="0 0 24 24"><path d="M5 20V9M10 20V5M15 20v-8M20 20V7"/><path d="M3 20h18"/></svg><span>Sweeten</span></button>
+        <button type="button" data-tab="learn">
+          <svg viewBox="0 0 24 24"><path d="M4 5h6a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4zM20 5h-6a3 3 0 0 0-3 3"/><path d="M20 5v12.5h-6.5A2.5 2.5 0 0 0 11 20"/></svg><span>Learn</span></button>
+        <button type="button" data-tab="settings">
+          <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg><span>Settings</span></button>
+      </nav>
+    </header>
+
+    <main id="main">
+      <!-- Tune -->
+      <section class="view view-tune" data-view-name="tune" aria-label="Tuner">
+        <div class="stage">
+          <div class="disc-wrap">
+            <canvas id="strobe" class="strobe" aria-hidden="true"></canvas>
+            <div class="hub" id="hub" aria-live="polite">
+              <div class="hub-note"><span id="noteName">–</span><span class="hub-oct" id="noteOct"></span></div>
+              <div class="hub-cents" id="cents">&nbsp;</div>
+              <div class="hub-hz" id="hz">&nbsp;</div>
+              <button class="start" id="startBtn" type="button">Start tuning</button>
+            </div>
+          </div>
+          <p class="instruction" id="instruction">Tap Start tuning and allow the microphone.</p>
+        </div>
+
+        <div class="deck">
+          <div class="headstock" id="headstock"></div>
+          <div class="deck-row">
+            <div class="seg" role="radiogroup" aria-label="String selection">
+              <button type="button" role="radio" data-mode="auto" aria-checked="true">Auto string</button>
+              <button type="button" role="radio" data-mode="manual" aria-checked="false">Locked</button>
+              <button type="button" role="radio" data-mode="chromatic" aria-checked="false">Chromatic</button>
+            </div>
+          </div>
+          <div class="deck-row deck-tools">
+            <label class="toggle"><input type="checkbox" id="intonation"><span>12th-fret intonation</span></label>
+            <div class="stepper" aria-label="Capo">
+              <span class="stepper-label" id="capoLabel">No capo</span>
+              <button type="button" id="capoDown" aria-label="Capo down">−</button>
+              <button type="button" id="capoUp" aria-label="Capo up">+</button>
+            </div>
+          </div>
+          <div class="deck-row deck-tools">
+            <button class="btn" type="button" id="refTone">Play reference</button>
+            <button class="btn btn-quiet" type="button" id="resetTuned">Clear ticks</button>
+          </div>
+          <p class="sweet-line" id="sweetLine"></p>
+        </div>
+      </section>
+
+      <!-- Tunings -->
+      <section class="view view-tunings" data-view-name="tunings" aria-label="Tuning library" hidden>
+        <div class="page">
+          <h1>Tunings</h1>
+          <p class="lede">Pick a tuning to load its six target notes. Each entry explains where it comes from and what it is for; sources are in Learn.</p>
+          <div id="tuningList"></div>
+          <details class="custom-tuning" id="customTuning">
+            <summary>Make your own tuning</summary>
+            <div class="custom-grid" id="customGrid"></div>
+            <div class="row">
+              <input type="text" id="customName" placeholder="Name, e.g. My open D" maxlength="40">
+              <button class="btn" type="button" id="customSave">Save and use</button>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- Sweeten -->
+      <section class="view view-sweeten" data-view-name="sweeten" aria-label="Sweetened tunings" hidden>
+        <div class="page">
+          <h1>Sweetened tunings</h1>
+          <p class="lede">Small per-string offsets on top of equal temperament, for chords that beat less. Showing offsets for <strong id="sweetFor">Standard</strong>.</p>
+          <div class="offsets" id="offsetChart" aria-label="Offsets per string"></div>
+          <p class="note" id="sweetNote"></p>
+          <div class="sweet-list" id="sweetList" role="radiogroup" aria-label="Sweetener"></div>
+          <div class="field" id="sweetnessField">
+            <label for="sweetness">Sweetness <output id="sweetnessOut">50 %</output></label>
+            <input type="range" id="sweetness" min="0" max="100" step="5" value="50">
+          </div>
+          <div class="field" id="anchorField">
+            <span class="field-label">Keep in place</span>
+            <div class="seg" role="radiogroup" aria-label="Anchor">
+              <button type="button" role="radio" data-anchor="average" aria-checked="true">Average pitch</button>
+              <button type="button" role="radio" data-anchor="root" aria-checked="false">Root strings</button>
+            </div>
+          </div>
+          <div class="custom-offsets" id="customOffsets" hidden></div>
+
+          <h2>Temperament</h2>
+          <p class="lede">Historical temperaments from the Strobe Center 5000-II set. They shift each note by pitch class, in chromatic mode and on the strings.</p>
+          <div class="field">
+            <label for="temperament">Temperament</label>
+            <select id="temperament"></select>
+          </div>
+          <div class="field">
+            <label for="temperRoot">Key</label>
+            <select id="temperRoot"></select>
+          </div>
+          <p class="note" id="temperAbout"></p>
+        </div>
+      </section>
+
+      <!-- Learn -->
+      <section class="view view-learn" data-view-name="learn" aria-label="Learn" hidden>
+        <div class="page prose" id="learn"></div>
+      </section>
+
+      <!-- Settings -->
+      <section class="view view-settings" data-view-name="settings" aria-label="Settings" hidden>
+        <div class="page">
+          <h1>Settings</h1>
+          <div class="field">
+            <label for="a4">Calibration A4 <output id="a4Out">440.0 Hz</output></label>
+            <input type="range" id="a4" min="350" max="550" step="0.1" value="440">
+            <div class="row presets">
+              <button class="btn btn-quiet" type="button" data-a4="415">415 baroque</button>
+              <button class="btn btn-quiet" type="button" data-a4="432">432</button>
+              <button class="btn btn-quiet" type="button" data-a4="440">440</button>
+              <button class="btn btn-quiet" type="button" data-a4="442">442</button>
+              <button class="btn btn-quiet" type="button" data-a4="443">443</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="globalCents">Overall offset <output id="globalOut">0.0 ¢</output></label>
+            <input type="range" id="globalCents" min="-50" max="50" step="0.1" value="0">
+          </div>
+          <div class="field">
+            <span class="field-label">Counts as tuned within</span>
+            <div class="seg" role="radiogroup" aria-label="Tolerance">
+              <button type="button" role="radio" data-tol="0.5">±0.5 ¢</button>
+              <button type="button" role="radio" data-tol="1">±1 ¢</button>
+              <button type="button" role="radio" data-tol="2">±2 ¢</button>
+              <button type="button" role="radio" data-tol="3">±3 ¢</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="gate">Input threshold <output id="gateOut">−58 dB</output></label>
+            <input type="range" id="gate" min="-80" max="-30" step="1" value="-58">
+            <p class="note">Raise it in noisy rooms so other sounds do not move the strobe.</p>
+          </div>
+          <div class="field">
+            <span class="field-label">Strobe light</span>
+            <div class="swatches" role="radiogroup" aria-label="Strobe light">
+              <button type="button" role="radio" data-lamp="neon" aria-label="Neon orange"></button>
+              <button type="button" role="radio" data-lamp="phosphor" aria-label="Phosphor green"></button>
+              <button type="button" role="radio" data-lamp="ice" aria-label="Ice blue"></button>
+              <button type="button" role="radio" data-lamp="lamp" aria-label="Warm white"></button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">Panel</span>
+            <div class="seg" role="radiogroup" aria-label="Panel">
+              <button type="button" role="radio" data-panel="walnut">Walnut</button>
+              <button type="button" role="radio" data-panel="daylight">Daylight</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="field-label">Headstock</span>
+            <div class="seg" role="radiogroup" aria-label="Headstock">
+              <button type="button" role="radio" data-hs="3+3">3 + 3</button>
+              <button type="button" role="radio" data-hs="6">6 in line</button>
+            </div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="leftHanded"><span>Left-handed headstock</span></label>
+          <label class="toggle"><input type="checkbox" id="flats"><span>Show flats (B♭ instead of A♯)</span></label>
+          <label class="toggle"><input type="checkbox" id="keepAwake"><span>Keep the screen on while tuning</span></label>
+          <div class="field">
+            <button class="btn btn-quiet" type="button" id="resetAll">Restore defaults</button>
+          </div>
+          <p class="note about" id="aboutApp"></p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "appId": "io.github.jonwenjen.strobetuner",
+  "appName": "Strobe Tuner",
+  "webDir": "www",
+  "backgroundColor": "#3a2517",
+  "android": {
+    "backgroundColor": "#3a2517"
+  },
+  "ios": {
+    "backgroundColor": "#3a2517",
+    "contentInset": "never"
+  }
+}

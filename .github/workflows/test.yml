@@ -1,0 +1,18 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Unit and DSP accuracy tests
+        run: node --test tests/*.test.mjs
+      - name: Accuracy report
+        run: node tests/accuracy-report.mjs >> "$GITHUB_STEP_SUMMARY"

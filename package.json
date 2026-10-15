@@ -1,0 +1,34 @@
+{
+  "name": "guitar-strobe-tuner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "True-strobe guitar tuner with sweetened tunings, automatic string detection and a researched library of alternate tunings. Web app + Android/iOS via Capacitor.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "accuracy": "node tests/accuracy-report.mjs",
+    "icons": "node scripts/build-icons.mjs",
+    "android:add": "cap add android && node scripts/patch-native.mjs",
+    "ios:add": "cap add ios && node scripts/patch-native.mjs",
+    "native:assets": "capacitor-assets generate --iconBackgroundColor \"#3a2517\" --iconBackgroundColorDark \"#3a2517\" --splashBackgroundColor \"#3a2517\" --splashBackgroundColorDark \"#3a2517\"",
+    "sync": "cap sync && node scripts/patch-native.mjs",
+    "android": "cap run android",
+    "ios": "cap run ios",
+    "android:open": "cap open android",
+    "ios:open": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
+    "sharp": "^0.35.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

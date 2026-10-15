@@ -1,0 +1,38 @@
+name: iOS simulator build
+
+on:
+  push:
+    branches: [main]
+    paths: ['www/**', 'capacitor.config.json', 'package.json', 'scripts/**', 'assets/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+      - name: Create the iOS project (if not committed)
+        run: |
+          if [ ! -d ios ]; then npx cap add ios; fi
+          node scripts/patch-native.mjs
+      - name: App icon and splash
+        continue-on-error: true
+        run: npx capacitor-assets generate --ios --iconBackgroundColor "#3a2517" --iconBackgroundColorDark "#3a2517" --splashBackgroundColor "#3a2517" --splashBackgroundColorDark "#3a2517"
+      - name: Copy web app into the project
+        run: npx cap sync ios && node scripts/patch-native.mjs
+      - name: Build for the iOS Simulator (unsigned)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          cd build/Build/Products/Debug-iphonesimulator && zip -qr "$GITHUB_WORKSPACE/StrobeTuner-simulator.zip" App.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: strobe-tuner-ios-simulator
+          path: StrobeTuner-simulator.zip
+          if-no-files-found: error
