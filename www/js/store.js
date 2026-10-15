@@ -4,6 +4,8 @@
 const KEY = 'strobe-tuner.v1';
 
 export const DEFAULTS = {
+  lang: null,                 // null = follow the browser; otherwise a code from i18n.LANGUAGES
+  terms: 'translate',         // 'translate' | 'original' | 'both' for special terms
   tuningId: 'standard',
   customTunings: [],          // [{id, name, notes:[6]}]
   sweetenerId: 'equal',

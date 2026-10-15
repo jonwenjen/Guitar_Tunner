@@ -14,6 +14,7 @@ A true-strobe guitar tuner for the web, Android and iOS, modelled on the feature
 - **Sweetened tunings.** Just-chord sweetener for open and modal tunings, a least-squares open-chord fit for standard shapes, a measured strobe-style "GTR" preset, and fully custom open-string plus 12th-fret offsets (the Buzz Feiten structure). A sweetness control sets how far each moves from equal temperament.
 - **Temperaments.** Equal, Pythagorean, just major, ¼-comma meantone, Werckmeister III, Kirnberger III, Young II and Kellner in any key — the Strobe Center 5000-II set, computed from their definitions.
 - **Tuning library.** 35 tunings in eight families with interval maps, history and citations; make and save your own.
+- **Six languages.** English, 繁體中文, 日本語, 한국어, Español and Deutsch, chosen from the browser or in Settings. A *Special terms* switch shows tuning names, temperaments and technical words (strobe, capo, cents…) translated, in the original, or both side by side — and decides whether note and interval names follow local custom (Do Re Mi in Spanish, H for B in German, 純四度 / 完全4度 / 완전4도 for P4).
 - **Also:** A4 350–550 Hz, ±50 ¢ global offset, capo 0–9, chromatic mode, 12th-fret intonation mode with saddle directions, reference tone, four strobe colours, walnut and daylight panels, left-handed headstock, works offline.
 
 ## Use it
@@ -71,6 +72,8 @@ www/                 the app (plain ES modules, no build step)
   js/temperaments.js   historical temperaments
   js/tunings.js        tuning library
   js/headstock.js      headstock diagram
+  js/i18n.js           languages, special-term modes, localized note and interval names
+  locales/             en, zh-TW, ja, ko, es, de
 tests/               node:test suites and synthetic string generator
 scripts/             local server, icon builder, native permission patcher, docs generator
 assets/              icon and splash sources for the native apps
@@ -80,10 +83,11 @@ assets/              icon and splash sources for the native apps
 ## Tests
 
 ```bash
-npm test             # 15 tests: detection on every string, strobe accuracy, string ID in all 35 tunings,
-                     # temperament tables, sweetener values, targets with capo/A4/sweeteners
+npm test             # 35 tests: detection on every string, strobe accuracy, string ID in all 35 tunings,
+                     # temperament tables, sweetener values, targets with capo/A4/sweeteners, and that
+                     # every language translates every string with matching placeholders in all term modes
 ```
 
 ## Notes
 
-Strobe Tuner is independent and not affiliated with Peterson Electro-Musical Products; "StroboPLUS", "Strobe Center" and "Sweetened Tunings" are Peterson's names, used here only to describe the reference features. The "GTR"-style preset uses offsets measured and published by guitarists, not Peterson's data. The Saira typeface is used under the SIL Open Font License (`www/fonts/OFL.txt`).
+Strobe Tuner is independent and not affiliated with Peterson Electro-Musical Products; "StroboPLUS", "Strobe Center" and "Sweetened Tunings" are Peterson's names, used here only to describe the reference features. The "GTR"-style preset uses offsets measured and published by guitarists, not Peterson's data. The Saira typeface and the accidentals from Noto Music are used under the SIL Open Font License (`www/fonts/`).

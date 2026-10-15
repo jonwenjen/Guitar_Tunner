@@ -56,6 +56,7 @@ export function sweetenerOffsets(sweetener, tuning, { sweetness = 0.5, anchor = 
     res.fret12 = (sw.fret12 || sw.open).slice();
     if (sw.id === 'strobe-gtr' && tuning.shape !== 'std' && tuning.shape !== 'drop') {
       res.note = 'Measured for standard tuning; applied by string number.';
+      res.noteKey = 'gtrByString';
     }
     return res;
   }
@@ -66,7 +67,7 @@ export function sweetenerOffsets(sweetener, tuning, { sweetness = 0.5, anchor = 
   }
   if (sw.kind === 'just') {
     if (tuning.root === undefined || tuning.root === null) {
-      return { ...res, applies: false, note: 'Just chord needs a chordal tuning (open, modal or slack key).' };
+      return { ...res, applies: false, noteKey: 'justNeedsChord', note: 'Just chord needs a chordal tuning (open, modal or slack key).' };
     }
     res.open = justChordOffsets(tuning, sweetness, anchor);
     res.fret12 = res.open.slice();
@@ -74,13 +75,14 @@ export function sweetenerOffsets(sweetener, tuning, { sweetness = 0.5, anchor = 
   }
   if (sw.kind === 'lsq') {
     if (tuning.shape !== 'std' && tuning.shape !== 'drop') {
-      return { ...res, applies: false, note: 'Open-chord fit needs standard or drop-tuning chord shapes.' };
+      return { ...res, applies: false, noteKey: 'lsqNeedsShapes', note: 'Open-chord fit needs standard or drop-tuning chord shapes.' };
     }
     res.open = openChordFit(sweetness);
     if (tuning.shape === 'drop') {
       // In drop tunings the 6th string doubles the 4th an octave down: give it the same offset.
       res.open[0] = res.open[2];
       res.note = '6th string matches the 4th (octave) in drop tunings.';
+      res.noteKey = 'dropMatches';
     }
     res.fret12 = res.open.slice();
     return res;

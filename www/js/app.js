@@ -11,13 +11,18 @@ import { TUNINGS, CATEGORIES } from './tunings.js';
 import { SWEETENERS, findSweetener, sweetenerOffsets } from './sweeteners.js';
 import { TEMPERAMENTS } from './temperaments.js';
 import { REFERENCES } from './references.js';
-import { ARTICLES, LEARN_REFS } from './learn.js';
+import { LEARN_REFS } from './learn.js';
 import { loadSettings, saveSettings, DEFAULTS } from './store.js';
-import { parseNote, noteLabel, noteName, octaveOf, cents as centsOf, adjacentIntervals, freqToMidi, SHARP_NAMES, FLAT_NAMES } from './music.js';
+import { parseNote, octaveOf, cents as centsOf, freqToMidi, noteLabel as noteLabelIntl } from './music.js';
+import {
+  LANGUAGES, setLanguage, detectLanguage, htmlLang, currentLanguage, listSep, t, tp, term, fmt, fmtSigned,
+  noteName, noteLabel, intervalNames, stringName, stringShort, tuningName, tuningAbout, categoryName,
+  sweetenerName, sweetenerAbout, temperamentName, temperamentAbout, learnArticles,
+} from './i18n.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-const ORDINAL = ['6th', '5th', '4th', '3rd', '2nd', '1st'];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 let S = loadSettings();
 const persist = () => saveSettings(S);
@@ -50,23 +55,28 @@ let mpmSmooth = null;
 let lastFrameTime = performance.now();
 let wakeLock = null;
 let srLast = '';
+let micError = null; // key of the last microphone error, re-rendered on language change
 
 const view = new StrobeView($('#strobe'));
 const headstock = new Headstock($('#headstock'), { onSelect: onStringTap });
 
 // ── Settings → derived data ────────────────────────────────────────────
 function allTunings() {
-  return [...TUNINGS, ...S.customTunings.map((t) => ({ ...t, category: 'yours', shape: null }))];
+  return [...TUNINGS, ...S.customTunings.map((x) => ({ ...x, category: 'yours', shape: null }))];
 }
 function currentTuning() {
-  return allTunings().find((t) => t.id === S.tuningId) || TUNINGS[0];
+  return allTunings().find((x) => x.id === S.tuningId) || TUNINGS[0];
 }
+const isCustom = (tuning) => tuning.category === 'yours';
 /** Spell notes with flats when the user asks, or when the tuning itself is written with flats (E♭ standard). */
-function useFlats(t = currentTuning()) {
-  return S.flats || t.notes.some((n) => /^[A-G](b|♭)/.test(n));
+function useFlats(tuning = currentTuning()) {
+  return S.flats || tuning.notes.some((n) => /^[A-G](b|♭)/.test(n));
 }
 function currentTemperament() {
-  return TEMPERAMENTS.find((t) => t.id === S.temperamentId) || TEMPERAMENTS[0];
+  return TEMPERAMENTS.find((x) => x.id === S.temperamentId) || TEMPERAMENTS[0];
+}
+function nameOf(tuning) {
+  return isCustom(tuning) ? { text: tuning.name, primary: tuning.name, secondary: '' } : tuningName(tuning);
 }
 
 function recompute() {
@@ -80,9 +90,9 @@ function recompute() {
 }
 
 function targetFreq(i) {
-  const t = targets[i];
-  if (!t) return 0;
-  return S.intonation ? t.freq12 : t.freq;
+  const x = targets[i];
+  if (!x) return 0;
+  return S.intonation ? x.freq12 : x.freq;
 }
 
 // ── Audio path ─────────────────────────────────────────────────────────
@@ -114,8 +124,9 @@ function latestFrame() {
 
 async function startMic() {
   const instr = $('#instruction');
+  micError = null;
   try {
-    instr.textContent = 'Starting the microphone…';
+    instr.textContent = t('instr.starting');
     instr.className = 'instruction';
     await mic.start();
     detector = new PitchDetector(mic.sampleRate, 4096);
@@ -125,9 +136,17 @@ async function startMic() {
     requestWakeLock();
     instr.textContent = idleInstruction();
   } catch (err) {
-    instr.textContent = err.message || String(err);
-    instr.className = 'instruction is-error';
+    micError = { code: err.code || 'unknown', name: err.detail || err.name || String(err) };
+    showMicError();
   }
+}
+
+function showMicError() {
+  if (!micError) return;
+  const instr = $('#instruction');
+  const key = `mic.${micError.code}`;
+  instr.textContent = micError.code === 'unknown' ? t('mic.unknown', { name: micError.name }) : t(key);
+  instr.className = 'instruction is-error';
 }
 
 async function stopMic() {
@@ -170,7 +189,7 @@ function loop(now) {
   if (engine && ringFilled >= frame.length) {
     if (now - lastDetect > 33) {
       lastDetect = now;
-      const minTarget = Math.min(...targets.map((t, i) => targetFreq(i)));
+      const minTarget = Math.min(...targets.map((_, i) => targetFreq(i)));
       const r = detector.detect(latestFrame(), {
         gateDb: S.gateDb,
         minFreq: Math.max(40, Math.min(70, minTarget * 0.7)),
@@ -202,7 +221,7 @@ function loop(now) {
 
   // Tuned ticks.
   if (reading && reading.sounding && S.mode !== 'chromatic' && activeString >= 0 && reading.cents !== null) {
-    if (tunedTracker.update(activeString, reading.cents, dt, S.tolerance)) announce(`${ORDINAL[activeString]} string tuned`);
+    if (tunedTracker.update(activeString, reading.cents, dt, S.tolerance)) announce(t('sr.tuned', { string: stringName(activeString) }));
   }
 
   const strobeOn = !!(reading && reading.sounding);
@@ -216,8 +235,8 @@ function loop(now) {
 
 function chooseReference(freq) {
   if (S.mode === 'chromatic') {
-    const t = chromaticTarget(freq, { a4: S.a4, globalCents: S.globalCents, temperament: currentTemperament(), temperamentRoot: S.temperamentRoot, flats: S.flats });
-    if (!chromRef || (t.midi !== chromRef.midi && Math.abs(centsOf(freq, chromRef.freq)) > 58)) chromRef = t;
+    const x = chromaticTarget(freq, { a4: S.a4, globalCents: S.globalCents, temperament: currentTemperament(), temperamentRoot: S.temperamentRoot, flats: S.flats });
+    if (!chromRef || (x.midi !== chromRef.midi && Math.abs(centsOf(freq, chromRef.freq)) > 58)) chromRef = x;
     engine.setReference(chromRef.freq);
     activeString = -1;
     return;
@@ -225,100 +244,116 @@ function chooseReference(freq) {
   if (S.mode === 'manual' && lockedString >= 0) {
     activeString = lockedString;
   } else {
-    const list = targets.map((t, i) => ({ freq: targetFreq(i) }));
+    const list = targets.map((_, i) => ({ freq: targetFreq(i) }));
     activeString = tracker.update(freq, list);
   }
   if (activeString >= 0) engine.setReference(targetFreq(activeString));
 }
 
+function stringMidi(i) {
+  const x = targets[i];
+  return x ? x.midi + (S.intonation ? 12 : 0) : null;
+}
 function stringLabel(i) {
-  const t = targets[i];
-  if (!t) return '';
-  return S.intonation ? noteLabel(t.midi + 12, useFlats()) : t.label;
+  const m = stringMidi(i);
+  return m === null ? '' : noteLabel(m, useFlats());
+}
+
+function setNote(name, octave) {
+  const noteEl = $('#noteName');
+  noteEl.textContent = name;
+  $('#noteOct').textContent = octave;
+  noteEl.parentElement.classList.toggle('is-long', name.length > 2);
 }
 
 function renderReadout(reading, level) {
   const hubEl = $('#hub');
   const instr = $('#instruction');
-  const noteEl = $('#noteName'), octEl = $('#noteOct'), centsEl = $('#cents'), hzEl = $('#hz');
+  const centsEl = $('#cents'), hzEl = $('#hz');
 
   let midi = null;
   if (S.mode === 'chromatic') midi = chromRef ? chromRef.midi : null;
-  else if (activeString >= 0) midi = targets[activeString].midi + (S.intonation ? 12 : 0);
+  else if (activeString >= 0) midi = stringMidi(activeString);
+  const flats = S.mode === 'chromatic' ? S.flats : useFlats();
 
   if (!mic.running) {
     hubEl.classList.add('is-idle');
   } else if (midi !== null && reading) {
-    noteEl.textContent = noteName(midi, S.mode === 'chromatic' ? S.flats : useFlats());
-    octEl.textContent = String(octaveOf(midi));
+    setNote(noteName(midi, flats), String(octaveOf(midi)));
     const c = reading.cents;
     const tol = S.tolerance;
     if (c !== null && Math.abs(c) >= 100 && lastMpm?.freq) {
       // More than a semitone away (wrong string locked, capo moved): say what we hear.
-      const heard = noteLabel(Math.round(freqToMidi(lastMpm.freq, S.a4)), useFlats());
-      centsEl.textContent = `Hearing ${heard}`;
+      const heard = noteLabel(Math.round(freqToMidi(lastMpm.freq, S.a4)), flats);
+      centsEl.textContent = t('hearing', { note: heard });
       centsEl.classList.remove('is-in');
-      hzEl.textContent = `${lastMpm.freq.toFixed(1)} Hz`;
+      hzEl.textContent = `${fmt(lastMpm.freq, 1)} Hz`;
       setInstruction(c, false, Math.round(Math.abs(c) / 100));
     } else if (c !== null) {
       const inTune = Math.abs(c) <= tol;
-      centsEl.textContent = `${c > 0 ? '+' : c < 0 ? '−' : '±'}${Math.abs(c).toFixed(1)} ¢`;
+      centsEl.textContent = `${fmtSigned(c, 1)} ¢`;
       centsEl.classList.toggle('is-in', inTune);
       const ref = engine?.ref || 0;
-      hzEl.textContent = ref ? `${(ref * Math.pow(2, c / 1200)).toFixed(2)} Hz` : '';
+      hzEl.textContent = ref ? `${fmt(ref * Math.pow(2, c / 1200), 2)} Hz` : '';
       setInstruction(c, inTune);
     }
   } else if (mic.running) {
-    noteEl.textContent = S.mode === 'chromatic' || activeString < 0 ? '–' : noteName(targets[activeString].midi + (S.intonation ? 12 : 0), useFlats());
-    octEl.textContent = '';
+    if (S.mode === 'chromatic' || activeString < 0) setNote('–', '');
+    else setNote(noteName(stringMidi(activeString), flats), '');
     centsEl.textContent = ' ';
     centsEl.classList.remove('is-in');
     hzEl.textContent = ' ';
     if (!instr.classList.contains('is-error')) {
       instr.className = 'instruction';
-      instr.textContent = idleInstruction();
+      const txt = idleInstruction();
+      if (instr.textContent !== txt) instr.textContent = txt;
     }
   }
 
+  const tuned = tunedTracker.tuned;
   headstock.update({
     labels: targets.map((_, i) => stringLabel(i)),
     active: S.mode === 'chromatic' ? -1 : activeString,
     locked: S.mode === 'manual' ? lockedString : -1,
-    tuned: tunedTracker.tuned,
+    tuned,
     level: reading && reading.sounding ? level : 0,
+    aria: targets.map((_, i) => {
+      const extra = [tuned[i] ? t('headstock.tuned') : '', i === lockedString && S.mode === 'manual' ? t('headstock.locked') : ''].filter(Boolean);
+      return [t('headstock.key', { string: stringName(i), note: stringLabel(i) }), ...extra].join(', ');
+    }),
   });
 }
 
 function idleInstruction() {
-  if (!mic.running) return 'Tap Start tuning and allow the microphone.';
-  if (S.mode === 'chromatic') return 'Play any note.';
+  if (!mic.running) return t('instr.start');
+  if (S.mode === 'chromatic') return t('instr.anyNote');
   if (S.mode === 'manual' && lockedString >= 0) {
     return S.intonation
-      ? `Play the ${ORDINAL[lockedString]} string at the 12th fret.`
-      : `Play the ${ORDINAL[lockedString]} string (${stringLabel(lockedString)}).`;
+      ? t('instr.lockedFret12', { string: stringName(lockedString) })
+      : t('instr.locked', { string: stringName(lockedString), note: stringLabel(lockedString) });
   }
-  return S.intonation ? 'Play any string at the 12th fret.' : 'Play an open string.';
+  return S.intonation ? t('instr.anyFret12') : t('instr.open');
 }
 
 function setInstruction(c, inTune, semitones = 0) {
   const instr = $('#instruction');
   instr.className = 'instruction' + (inTune ? ' is-in' : '');
-  const who = S.mode === 'chromatic' || activeString < 0 ? '' : ` the ${ORDINAL[activeString]} string`;
+  const hasString = !(S.mode === 'chromatic' || activeString < 0);
+  const string = hasString ? stringName(activeString) : '';
   let html;
   if (inTune) {
-    html = S.intonation ? 'Intonation is set for this string.' : `In tune${who ? ` — ${ORDINAL[activeString]} string` : ''}.`;
+    if (S.intonation) html = esc(t('instr.intonationSet'));
+    else html = esc(hasString ? t('instr.inTune', { string }) : t('instr.inTuneChromatic'));
   } else if (S.intonation) {
-    html = c > 0
-      ? '<span class="dir">Sharp at the 12th</span>: move the saddle away from the neck.'
-      : '<span class="dir">Flat at the 12th</span>: move the saddle toward the neck.';
+    html = c > 0 ? t('instr.sharp12') : t('instr.flat12');
   } else if (S.mode === 'chromatic') {
-    html = c > 0 ? '<span class="dir">↓ Sharp</span> — lower the pitch.' : '<span class="dir">↑ Flat</span> — raise the pitch.';
+    html = c > 0 ? t('instr.chromaticSharp') : t('instr.chromaticFlat');
   } else {
-    html = c > 0 ? `<span class="dir">↓ Loosen</span>${who}` : `<span class="dir">↑ Tighten</span>${who}`;
-    html += semitones ? ` — about ${semitones} semitone${semitones > 1 ? 's' : ''} to go.` : '.';
+    html = c > 0 ? t('instr.loosen', { string }) : t('instr.tighten', { string });
+    html += semitones ? tp('instr.togo', semitones) : t('instr.end');
   }
   if (instr.innerHTML !== html) instr.innerHTML = html;
-  announce(inTune ? `${who ? ORDINAL[activeString] + ' string ' : ''}in tune` : '');
+  if (inTune) announce(hasString ? t('sr.inTune', { string }) : t('sr.inTuneChromatic'));
 }
 
 function announce(text) {
@@ -388,7 +423,7 @@ function bindTune() {
 
 function updateToneButton() {
   const b = $('#refTone');
-  b.textContent = tone.playing ? 'Stop reference' : 'Play reference';
+  b.textContent = tone.playing ? t('ref.stop') : t('ref.play');
   b.classList.toggle('is-on', tone.playing);
 }
 
@@ -399,73 +434,95 @@ function setCapo(n) {
   renderHeader();
 }
 
-// ── Rendering of static parts ──────────────────────────────────────────
+// ── Static text ────────────────────────────────────────────────────────
+/** Fill every element marked with data-i18n* attributes. */
+function applyI18n() {
+  document.documentElement.lang = htmlLang();
+  document.title = term('appName');
+  $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-term]').forEach((el) => { el.textContent = term(el.dataset.i18nTerm); });
+  $$('[data-i18n-aria]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.i18nAria)));
+  $$('[data-i18n-placeholder]').forEach((el) => el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder)));
+  headstock.setGroupLabel(t('headstock.aria'));
+  const english = currentLanguage() === 'en';
+  $$('.label-alt').forEach((el) => { el.hidden = english; });
+  $('#termsField').hidden = english;
+  updateToneButton();
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────
 function renderHeader() {
-  const t = currentTuning();
-  $('#tuningName').textContent = t.name;
-  const names = t.notes.map((n) => noteName(parseNote(n), useFlats(t))).join(' ');
-  $('#tuningNotes').textContent = S.capo ? `${names}, capo ${S.capo}` : names;
+  const tuning = currentTuning();
+  const nm = nameOf(tuning);
+  $('#tuningName').textContent = nm.text;
+  const names = tuning.notes.map((n) => noteName(parseNote(n), useFlats(tuning))).join(' ');
+  $('#tuningNotes').textContent = S.capo ? t('header.capo', { notes: names, n: S.capo }) : names;
   const sw = findSweetener(S.sweetenerId);
   const chip = $('#chipSweet');
-  chip.textContent = sw.id === 'equal' ? 'Equal' : sw.name.replace(/ \(.*\)$/, '');
+  chip.textContent = sw.id === 'equal' ? t('chip.equal') : sweetenerName(sw).primary.replace(/ [(（].*[)）]$/, '');
   chip.classList.toggle('is-on', sw.id !== 'equal');
   const a4 = $('#chipA4');
-  a4.textContent = `A4 ${Number(S.a4).toFixed(S.a4 % 1 ? 1 : 0)}`;
+  a4.textContent = t('chip.a4', { note: noteLabel(69), hz: fmt(S.a4, S.a4 % 1 ? 1 : 0) });
   a4.classList.toggle('is-on', S.a4 !== 440 || S.globalCents !== 0);
-  $('#capoLabel').textContent = S.capo ? `Capo ${S.capo}` : 'No capo';
+  $('#capoLabel').textContent = S.capo ? t('capo.n', { n: S.capo }) : t('capo.none');
   $('#intonation').checked = S.intonation;
   $$('[data-mode]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === S.mode)));
 
   const parts = [];
+  const swName = sweetenerName(sw).text;
   if (sw.id !== 'equal') {
     parts.push(sweet.applies
-      ? `${sw.name}: ${sweet.open.map((v) => fmtOffset(v)).join(', ')} ¢`
-      : `${sw.name} does not apply to this tuning`);
+      ? t('sweetLine.applies', { name: swName, offsets: sweet.open.map(fmtOffset).join(', ') })
+      : t('sweetLine.na', { name: swName }));
   }
-  if (S.temperamentId !== 'equal') parts.push(`${currentTemperament().name} on ${SHARP_NAMES[S.temperamentRoot]}`);
-  $('#sweetLine').textContent = parts.join('. ');
+  if (S.temperamentId !== 'equal') {
+    parts.push(t('sweetLine.temperament', { name: temperamentName(currentTemperament()).text, key: noteName(S.temperamentRoot + 60, S.flats) }));
+  }
+  $('#sweetLine').textContent = parts.join(' / ');
 }
 
-const fmtOffset = (v) => (Math.abs(v) < 0.05 ? '0' : `${v > 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`);
+const fmtOffset = (v) => (Math.abs(v) < 0.05 ? fmt(0, 0) : fmtSigned(v, 1));
 
 function renderTunings() {
   const host = $('#tuningList');
   host.innerHTML = '';
-  const cats = [...CATEGORIES];
-  if (S.customTunings.length) cats.unshift({ id: 'yours', name: 'Your tunings' });
+  const cats = CATEGORIES.map((c) => c.id);
+  if (S.customTunings.length) cats.unshift('yours');
   const std = TUNINGS[0].notes.map(parseNote);
-  for (const cat of cats) {
-    const list = allTunings().filter((t) => t.category === cat.id);
+  for (const catId of cats) {
+    const list = allTunings().filter((x) => x.category === catId);
     if (!list.length) continue;
     const sec = document.createElement('section');
     sec.className = 'cat';
-    sec.innerHTML = `<h2>${cat.name}</h2>`;
-    for (const t of list) {
-      const midis = t.notes.map(parseNote);
+    sec.innerHTML = `<h2>${esc(categoryName(catId))}</h2>`;
+    for (const tuning of list) {
+      const midis = tuning.notes.map(parseNote);
       const row = document.createElement('div');
-      row.className = 'tuning-row' + (t.id === S.tuningId ? ' is-current' : '');
-      const fl = useFlats(t);
-      const ribbon = midis.map((m, i) => `<span class="${m !== std[i] ? 'changed' : ''}">${noteLabel(m, fl)}</span>`).join('');
-      const src = (t.sources || []).map((id) => REFERENCES[id]).filter(Boolean)
-        .map((r) => r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${shortCite(r.cite)}</a>` : shortCite(r.cite)).join('; ');
+      row.className = 'tuning-row' + (tuning.id === S.tuningId ? ' is-current' : '');
+      const fl = useFlats(tuning);
+      const ribbon = midis.map((m, i) => `<span class="${m !== std[i] ? 'changed' : ''}">${esc(noteLabel(m, fl))}</span>`).join('');
+      const src = (tuning.sources || []).map((id) => REFERENCES[id]).filter(Boolean)
+        .map((r) => r.url ? `<a href="${r.url}" target="_blank" rel="noopener">${esc(shortCite(r.cite))}</a>` : esc(shortCite(r.cite))).join('; ');
+      const nm = nameOf(tuning);
+      const about = isCustom(tuning) ? t('custom.about') : tuningAbout(tuning);
       row.innerHTML = `
         <div>
-          <h3>${t.name}</h3>
-          <div class="ribbon" aria-label="Strings 6 to 1">${ribbon}</div>
-          <div class="intervals">${adjacentIntervals(midis).join('  ')}</div>
+          <h3>${esc(nm.primary)}${nm.secondary ? `<span class="alt-name" lang="en">${esc(nm.secondary)}</span>` : ''}</h3>
+          <div class="ribbon" aria-label="${esc(t('tuning.ribbonAria'))}">${ribbon}</div>
+          <div class="intervals">${esc(intervalNames(midis).join('  '))}</div>
         </div>
         <div class="actions">
-          ${t.id === S.tuningId ? '<button class="btn is-on" type="button" disabled>In use</button>' : `<button class="btn" type="button" data-use="${t.id}">Use</button>`}
-          ${t.category === 'yours' ? `<button class="btn btn-quiet" type="button" data-del="${t.id}" aria-label="Delete ${t.name}">Delete</button>` : ''}
+          ${tuning.id === S.tuningId ? `<button class="btn is-on" type="button" disabled>${esc(t('tuning.inUse'))}</button>` : `<button class="btn" type="button" data-use="${tuning.id}">${esc(t('tuning.use'))}</button>`}
+          ${isCustom(tuning) ? `<button class="btn btn-quiet" type="button" data-del="${tuning.id}" aria-label="${esc(t('tuning.deleteAria', { name: tuning.name }))}">${esc(t('tuning.delete'))}</button>` : ''}
         </div>
-        ${t.about ? `<details><summary>About this tuning</summary><p>${t.about}</p>${src ? `<p class="src">Sources: ${src}</p>` : ''}</details>` : ''}`;
+        <details><summary>${esc(t('tuning.about'))}</summary><p>${esc(about)}</p>${src ? `<p class="src">${t('tuning.sources', { list: src })}</p>` : ''}</details>`;
       sec.appendChild(row);
     }
     host.appendChild(sec);
   }
   $$('[data-use]', host).forEach((b) => b.addEventListener('click', () => useTuning(b.dataset.use)));
   $$('[data-del]', host).forEach((b) => b.addEventListener('click', () => {
-    S.customTunings = S.customTunings.filter((t) => t.id !== b.dataset.del);
+    S.customTunings = S.customTunings.filter((x) => x.id !== b.dataset.del);
     if (S.tuningId === b.dataset.del) S.tuningId = 'standard';
     persist(); recompute(); renderAll();
   }));
@@ -497,17 +554,18 @@ function renderCustomBuilder() {
   for (let m = parseNote('A1'); m <= parseNote('G4'); m++) options.push(m);
   const cur = currentTuning().notes.map(parseNote);
   grid.innerHTML = cur.map((midi, i) => `
-    <label>${ORDINAL[i]}
-      <select data-cs="${i}">${options.map((m) => `<option value="${m}" ${m === midi ? 'selected' : ''}>${noteLabel(m, S.flats)}</option>`).join('')}</select>
+    <label>${esc(stringShort(i))}
+      <select data-cs="${i}">${options.map((m) => `<option value="${m}" ${m === midi ? 'selected' : ''}>${esc(noteLabel(m, S.flats))}</option>`).join('')}</select>
     </label>`).join('');
 }
 
 function bindCustomBuilder() {
   $('#customSave').addEventListener('click', () => {
-    const notes = $$('[data-cs]').map((s) => noteLabel(Number(s.value)).replace('♯', '#'));
+    // Stored with international letter names so saved tunings survive language changes.
+    const notes = $$('[data-cs]').map((s) => noteLabelIntl(Number(s.value)).replace('♯', '#'));
     const name = $('#customName').value.trim() || notes.map((n) => n.replace(/\d/g, '')).join('');
     const id = `custom-${Date.now().toString(36)}`;
-    S.customTunings.push({ id, name, notes, about: 'Your own tuning.' });
+    S.customTunings.push({ id, name, notes });
     persist();
     useTuning(id);
   });
@@ -515,7 +573,10 @@ function bindCustomBuilder() {
 
 function renderSweeten() {
   const tuning = currentTuning();
-  $('#sweetFor').textContent = `${tuning.name}, ${tuning.notes.map((n) => noteName(parseNote(n), useFlats(tuning))).join(' ')}`;
+  const notes = tuning.notes.map((n) => noteName(parseNote(n), useFlats(tuning))).join(' ');
+  const lede = esc(t('sweeten.lede', { tuning: '\u0000' })).replace('\u0000', `<strong>${esc(nameOf(tuning).text)}, ${esc(notes)}</strong>`);
+  $('#sweetLede').innerHTML = lede;
+
   // Offset chart.
   const chart = $('#offsetChart');
   const max = 15;
@@ -523,17 +584,20 @@ function renderSweeten() {
     const h = Math.min(1, Math.abs(v) / max) * 60;
     const style = v >= 0 ? `bottom:60px;height:${h}px` : `top:60px;height:${h}px`;
     const name = noteName(parseNote(tuning.notes[i]) + S.capo, useFlats(tuning));
-    return `<div class="bar"><span class="bar-val">${fmtOffset(v)}</span><div class="bar-track"><div class="bar-fill ${v < 0 ? 'neg' : ''}" style="${style}"></div></div><span class="bar-name">${name}</span></div>`;
+    return `<div class="bar"><span class="bar-val">${fmtOffset(v)}</span><div class="bar-track"><div class="bar-fill ${v < 0 ? 'neg' : ''}" style="${style}"></div></div><span class="bar-name">${esc(name)}</span></div>`;
   }).join('');
-  chart.setAttribute('aria-label', `Offsets in cents, 6th to 1st string: ${sweet.open.map(fmtOffset).join(', ')}`);
-  $('#sweetNote').textContent = sweet.note || (S.sweetenerId === 'equal' ? 'Bars show each string’s offset in cents (±15 ¢ scale).' : '');
+  chart.setAttribute('aria-label', t('sweeten.chartAria', { list: sweet.open.map(fmtOffset).join(', ') }));
+  $('#sweetNote').textContent = sweet.noteKey ? t(`sweetNote.${sweet.noteKey}`) : (S.sweetenerId === 'equal' ? t('sweeten.chartNote') : '');
 
   const list = $('#sweetList');
-  list.innerHTML = SWEETENERS.map((s) => `
+  list.innerHTML = SWEETENERS.map((s) => {
+    const nm = sweetenerName(s);
+    return `
     <button type="button" role="radio" class="sweet-item" data-sw="${s.id}" aria-checked="${s.id === S.sweetenerId}">
       <span class="dot" aria-hidden="true"></span>
-      <span><strong>${s.name}</strong><span class="d">${s.about}</span></span>
-    </button>`).join('');
+      <span><strong>${esc(nm.primary)}${nm.secondary ? `<span class="alt-name" lang="en">${esc(nm.secondary)}</span>` : ''}</strong><span class="d">${esc(sweetenerAbout(s))}</span></span>
+    </button>`;
+  }).join('');
   $$('[data-sw]', list).forEach((b) => b.addEventListener('click', () => {
     S.sweetenerId = b.dataset.sw;
     persist(); recompute(); renderHeader(); renderSweeten();
@@ -543,17 +607,18 @@ function renderSweeten() {
   $('#sweetnessField').hidden = !sw.usesSweetness;
   $('#anchorField').hidden = sw.kind !== 'just';
   $('#sweetness').value = Math.round(S.sweetness * 100);
-  $('#sweetnessOut').textContent = `${Math.round(S.sweetness * 100)} %`;
+  $('#sweetnessOut').textContent = `${fmt(Math.round(S.sweetness * 100), 0)} %`;
   $$('[data-anchor]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.anchor === S.anchor)));
 
   const co = $('#customOffsets');
   co.hidden = sw.kind !== 'custom';
-  if (sw.kind === 'custom' && !co.querySelector('table')) {
-    const head = ORDINAL.map((o) => `<th scope="col">${o}</th>`).join('');
-    const rowFor = (key, label) => `<tr><th scope="row">${label}</th>${S.custom[key].map((v, i) =>
-      `<td><input type="number" step="0.1" min="-50" max="50" value="${v}" data-co="${key}" data-i="${i}" aria-label="${label}, ${ORDINAL[i]} string, cents"></td>`).join('')}</tr>`;
-    co.innerHTML = `<table><thead><tr><th></th>${head}</tr></thead><tbody>${rowFor('open', 'Open')}${rowFor('fret12', '12th fret')}</tbody></table>
-      <p class="note">Cents from equal temperament. 12th-fret values are used in 12th-fret intonation mode.</p>`;
+  if (sw.kind === 'custom' && co.dataset.lang !== currentLanguage() + S.terms) {
+    co.dataset.lang = currentLanguage() + S.terms;
+    const head = [0, 1, 2, 3, 4, 5].map((i) => `<th scope="col">${esc(stringShort(i))}</th>`).join('');
+    const rowFor = (key, label) => `<tr><th scope="row">${esc(label)}</th>${S.custom[key].map((v, i) =>
+      `<td><input type="number" step="0.1" min="-50" max="50" value="${v}" data-co="${key}" data-i="${i}" aria-label="${esc(t('customOffsets.cellAria', { row: label, string: stringName(i) }))}"></td>`).join('')}</tr>`;
+    co.innerHTML = `<table><thead><tr><th></th>${head}</tr></thead><tbody>${rowFor('open', t('customOffsets.open'))}${rowFor('fret12', t('customOffsets.fret12'))}</tbody></table>
+      <p class="note">${esc(t('customOffsets.note'))}</p>`;
     $$('[data-co]', co).forEach((inp) => inp.addEventListener('input', () => {
       const v = Math.max(-50, Math.min(50, Number(inp.value) || 0));
       S.custom[inp.dataset.co][Number(inp.dataset.i)] = v;
@@ -563,30 +628,26 @@ function renderSweeten() {
 
   // Temperaments.
   const tsel = $('#temperament');
-  if (!tsel.options.length) {
-    tsel.innerHTML = TEMPERAMENTS.map((t) => `<option value="${t.id}">${t.name}</option>`).join('');
-    $('#temperRoot').innerHTML = SHARP_NAMES.map((n, i) => `<option value="${i}">${S.flats ? FLAT_NAMES[i] : n}</option>`).join('');
-  }
+  tsel.innerHTML = TEMPERAMENTS.map((x) => `<option value="${x.id}">${esc(temperamentName(x).text)}</option>`).join('');
+  $('#temperRoot').innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i}">${esc(noteName(60 + i, S.flats))}</option>`).join('');
   tsel.value = S.temperamentId;
   $('#temperRoot').value = String(S.temperamentRoot);
   $('#temperRoot').disabled = S.temperamentId === 'equal';
-  $('#temperAbout').textContent = currentTemperament().about;
+  $('#temperAbout').textContent = temperamentAbout(currentTemperament());
 }
-
-const renderSweetChartOnly = () => renderSweeten();
 
 function bindSweeten() {
   $('#sweetness').addEventListener('input', (e) => {
     S.sweetness = Number(e.target.value) / 100;
-    persist(); recompute(); renderHeader(); renderSweetChartOnly();
+    persist(); recompute(); renderHeader(); renderSweeten();
   });
   $$('[data-anchor]').forEach((b) => b.addEventListener('click', () => {
     S.anchor = b.dataset.anchor;
-    persist(); recompute(); renderHeader(); renderSweetChartOnly();
+    persist(); recompute(); renderHeader(); renderSweeten();
   }));
   $('#temperament').addEventListener('change', (e) => {
     S.temperamentId = e.target.value;
-    persist(); recompute(); renderHeader(); renderSweetChartOnly();
+    persist(); recompute(); renderHeader(); renderSweeten();
   });
   $('#temperRoot').addEventListener('change', (e) => {
     S.temperamentRoot = Number(e.target.value);
@@ -597,31 +658,59 @@ function bindSweeten() {
 function renderLearn() {
   const host = $('#learn');
   const refs = LEARN_REFS.map((id) => REFERENCES[id]).filter(Boolean);
-  host.innerHTML = `<h1>Learn</h1>
-    <p class="lede">How the strobe reads a string, when sweetening helps, and where the tunings in the library come from.</p>
-    ${ARTICLES.map((a) => `<article id="learn-${a.id}"><h2>${a.title}</h2>${a.body.map((p) => `<p>${p}</p>`).join('')}</article>`).join('')}
-    <h2>References</h2>
-    <ol class="refs">${refs.map((r) => `<li>${r.cite}${r.url ? ` <a href="${r.url}" target="_blank" rel="noopener">Link</a>` : ''}</li>`).join('')}</ol>`;
+  host.innerHTML = `<h1>${esc(t('learn.title'))}</h1>
+    <p class="lede">${esc(t('learn.lede'))}</p>
+    ${learnArticles().map((a) => `<article id="learn-${a.id}"><h2>${esc(a.title)}</h2>${a.body.map((p) => `<p>${esc(p)}</p>`).join('')}</article>`).join('')}
+    <h2>${esc(t('learn.refs'))}</h2>
+    <ol class="refs" lang="en">${refs.map((r) => `<li>${esc(r.cite)}${r.url ? ` <a href="${r.url}" target="_blank" rel="noopener">${esc(t('learn.link'))}</a>` : ''}</li>`).join('')}</ol>`;
 }
 
 function renderSettings() {
+  const sel = $('#lang');
+  if (!sel.options.length) sel.innerHTML = LANGUAGES.map((l) => `<option value="${l.code}" lang="${l.code}">${l.name}</option>`).join('');
+  sel.value = currentLanguage();
+  $$('[data-terms]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.terms === S.terms)));
+  $('#termExample').textContent = [
+    tuningName('drop-d').text,
+    term('capo'),
+    term('strobe'),
+    TUNINGS[0].notes.map((n) => noteName(parseNote(n))).join(' '),
+    intervalNames([parseNote('E2'), parseNote('A2')])[0],
+  ].join(listSep());
+  $('#a4Label').textContent = t('a4.label', { note: noteLabel(69) });
   $('#a4').value = S.a4;
-  $('#a4Out').textContent = `${Number(S.a4).toFixed(1)} Hz`;
+  $('#a4Out').textContent = `${fmt(S.a4, 1)} Hz`;
   $('#globalCents').value = S.globalCents;
-  $('#globalOut').textContent = `${S.globalCents > 0 ? '+' : S.globalCents < 0 ? '−' : ''}${Math.abs(S.globalCents).toFixed(1)} ¢`;
+  $('#globalOut').textContent = `${S.globalCents ? fmtSigned(S.globalCents, 1) : fmt(0, 1)} ¢`;
   $('#gate').value = S.gateDb;
-  $('#gateOut').textContent = `−${Math.abs(S.gateDb)} dB`;
-  $$('[data-tol]').forEach((b) => b.setAttribute('aria-checked', String(Number(b.dataset.tol) === S.tolerance)));
+  $('#gateOut').textContent = `−${fmt(Math.abs(S.gateDb), 0)} dB`;
+  $$('[data-tol]').forEach((b) => {
+    b.setAttribute('aria-checked', String(Number(b.dataset.tol) === S.tolerance));
+    b.textContent = `±${fmt(Number(b.dataset.tol), Number(b.dataset.tol) % 1 ? 1 : 0)} ¢`;
+  });
   $$('[data-lamp]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.lamp === S.light)));
   $$('[data-panel]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.panel === S.theme)));
   $$('[data-hs]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.hs === S.headstock)));
   $('#leftHanded').checked = S.leftHanded;
   $('#flats').checked = S.flats;
   $('#keepAwake').checked = S.keepAwake;
-  $('#aboutApp').innerHTML = 'Strobe Tuner is an independent open-source project and is not affiliated with Peterson Electro-Musical Products. Note detection uses the McLeod Pitch Method; fine tuning uses a heterodyne strobe. Saira typeface © Omnibus-Type, SIL Open Font License.';
+}
+
+async function changeLanguage(code, terms) {
+  S.lang = code;
+  S.terms = terms;
+  persist();
+  await setLanguage(code, terms);
+  applyI18n();
+  renderAll();
+  renderLearn();
+  showMicError();
+  if (mic.running && !micError) $('#instruction').textContent = idleInstruction();
 }
 
 function bindSettings() {
+  $('#lang').addEventListener('change', (e) => changeLanguage(e.target.value, S.terms));
+  $$('[data-terms]').forEach((b) => b.addEventListener('click', () => changeLanguage(currentLanguage(), b.dataset.terms)));
   $('#a4').addEventListener('input', (e) => { S.a4 = Number(e.target.value); afterSetting(); });
   $$('[data-a4]').forEach((b) => b.addEventListener('click', () => { S.a4 = Number(b.dataset.a4); afterSetting(); }));
   $('#globalCents').addEventListener('input', (e) => { S.globalCents = Number(e.target.value); afterSetting(); });
@@ -633,10 +722,9 @@ function bindSettings() {
   $('#leftHanded').addEventListener('change', (e) => { S.leftHanded = e.target.checked; afterSetting(); applyTheme(); });
   $('#flats').addEventListener('change', (e) => { S.flats = e.target.checked; afterSetting(); renderAll(); });
   $('#keepAwake').addEventListener('change', (e) => { S.keepAwake = e.target.checked; afterSetting(); if (S.keepAwake && mic.running) requestWakeLock(); else releaseWakeLock(); });
-  $('#resetAll').addEventListener('click', () => {
-    const keep = S.customTunings;
-    S = structuredClone(DEFAULTS);
-    S.customTunings = keep;
+  $('#resetAll').addEventListener('click', async () => {
+    const keep = { customTunings: S.customTunings, lang: S.lang, terms: S.terms };
+    S = { ...structuredClone(DEFAULTS), ...keep };
     persist(); recompute(); applyTheme(); renderAll();
   });
 }
@@ -667,7 +755,7 @@ function renderAll() {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────
-function boot() {
+async function boot() {
   const sr = document.createElement('p');
   sr.id = 'srStatus';
   sr.className = 'sr-only';
@@ -675,8 +763,10 @@ function boot() {
   document.body.appendChild(sr);
 
   if (S.mode === 'manual') S.mode = 'auto';
+  await setLanguage(S.lang || detectLanguage(), S.terms);
   recompute();
   applyTheme();
+  applyI18n();
   renderAll();
   renderLearn();
   bindTune();
@@ -686,6 +776,7 @@ function boot() {
   $$('[data-tab]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.tab)));
   $$('[data-goto]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.goto)));
   $('#hub').classList.add('is-idle');
+  $('#instruction').textContent = idleInstruction();
   window.addEventListener('resize', () => view.resize());
   requestAnimationFrame(loop);
 

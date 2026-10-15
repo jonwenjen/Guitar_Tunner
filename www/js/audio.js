@@ -42,7 +42,7 @@ export class MicInput {
       if (err && err.name === 'NotFoundError') {
         throw new MicError('missing', 'No microphone was found. Connect one, or plug your guitar into an audio interface, then tap Start.');
       }
-      throw new MicError('unknown', `The microphone could not start (${err?.name || err}).`);
+      throw new MicError('unknown', `The microphone could not start (${err?.name || err}).`, err?.name || String(err));
     }
     await resumed;
     const ctx = this.ctx;
@@ -90,8 +90,9 @@ export class MicInput {
 }
 
 export class MicError extends Error {
-  constructor(code, message) {
+  constructor(code, message, detail = '') {
     super(message);
-    this.code = code;
+    this.code = code;   // the app shows a translated message for each code
+    this.detail = detail;
   }
 }

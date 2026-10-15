@@ -1,5 +1,13 @@
 /* Strobe Tuner — walnut cabinet, brass hardware, bone inlay, a neon lamp behind the disc. */
 
+/* ♭ ♮ ♯ only, from Noto Music (SIL OFL): Saira has no accidentals, and CJK fallbacks draw them full-width. */
+@font-face {
+  font-family: 'Music Symbols';
+  src: url('../fonts/music-symbols.woff') format('woff');
+  unicode-range: U+266D-266F;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'Saira';
   src: url('../fonts/saira-var.woff') format('woff');
@@ -26,7 +34,8 @@
   --light: #ff6a1f;
   --light-core: #ffc48a;
   --focus: #ffd29a;
-  --font: 'Saira', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font: 'Saira', 'Music Symbols', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --font-cjk: system-ui, sans-serif;
   --tabbar-h: 64px;
   color-scheme: dark;
 }
@@ -53,6 +62,16 @@ html[data-theme='daylight'] {
 }
 
 * { box-sizing: border-box; }
+
+/* CJK text falls back from Saira (Latin) to a native face per language. */
+html:lang(zh-Hant-TW) { --font-cjk: 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', 'Heiti TC', sans-serif; }
+html:lang(ja) { --font-cjk: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', 'Meiryo', sans-serif; }
+html:lang(ko) { --font-cjk: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif; }
+html:lang(zh-Hant-TW), html:lang(ja), html:lang(ko) {
+  --font: 'Saira', 'Music Symbols', var(--font-cjk);
+}
+html:lang(zh-Hant-TW) body, html:lang(ja) body, html:lang(ko) body { line-height: 1.65; }
+html:lang(zh-Hant-TW) .tuning-notes, html:lang(ja) .tuning-notes, html:lang(ko) .tuning-notes { letter-spacing: 0.04em; }
 [hidden] { display: none !important; }
 
 html, body { margin: 0; height: 100%; }
@@ -87,8 +106,9 @@ button { cursor: pointer; }
 
 /* ── Top bar ─────────────────────────────────────────────────────────── */
 .topbar {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  flex-wrap: wrap;            /* long tuning names push the chips onto a second row */
+  justify-content: space-between;
   align-items: center;
   gap: 4px 12px;
   padding: calc(env(safe-area-inset-top) + 10px) 16px 6px;
@@ -100,10 +120,10 @@ button { cursor: pointer; }
   display: flex; flex-direction: column; align-items: flex-start;
   background: none; border: 0; padding: 4px 0; text-align: left; min-width: 0;
 }
-.tuning-name { font-size: 1.25rem; font-weight: 600; font-stretch: 108%; line-height: 1.15; }
+.tuning-name { font-size: 1.25rem; font-weight: 600; font-stretch: 108%; line-height: 1.15; overflow-wrap: anywhere; hyphens: auto; }
 .tuning-notes { font-size: 0.9rem; color: var(--ink-dim); letter-spacing: 0.08em; font-stretch: 90%; }
 
-.chips { display: flex; gap: 6px; justify-self: end; }
+.chips { display: flex; gap: 6px; margin-left: auto; }
 .chip {
   border: 1px solid var(--rule); background: var(--wood-2); border-radius: 999px;
   padding: 5px 11px; font-size: 0.82rem; font-stretch: 88%; color: var(--ink-dim); white-space: nowrap;
@@ -123,7 +143,10 @@ button { cursor: pointer; }
 .tabs button {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   background: none; border: 0; color: var(--ink-dim); font-size: 0.74rem; font-stretch: 88%;
+  min-width: 0; padding: 0 2px;
 }
+.tabs button span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html:lang(ja) .tabs button, html:lang(ko) .tabs button, html:lang(zh-Hant-TW) .tabs button { font-size: 0.7rem; letter-spacing: -0.02em; }
 .tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tabs button[aria-current='page'] { color: var(--ink); }
 .tabs button[aria-current='page'] svg { stroke: var(--brass); }
@@ -156,6 +179,7 @@ main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px
   font-size: 12.5cqw; line-height: 0.95; font-weight: 600; font-stretch: 112%;
   letter-spacing: -0.02em; display: flex; align-items: baseline;
 }
+.hub-note.is-long { font-size: 9cqw; font-stretch: 100%; }
 .hub-oct { font-size: 0.36em; font-weight: 500; font-stretch: 100%; margin-left: 0.06em; opacity: 0.7; }
 .hub-cents { font-size: 4.2cqw; font-weight: 500; font-stretch: 96%; min-height: 1.3em; margin-top: 0.35cqw; }
 .hub-cents.is-in { color: var(--patina); }
@@ -282,6 +306,7 @@ main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px
 .ribbon span.changed { border-color: color-mix(in srgb, var(--brass) 70%, transparent); color: var(--brass); }
 .intervals { font-size: 0.8rem; color: var(--ink-dim); font-stretch: 88%; letter-spacing: 0.02em; }
 .tuning-row details { grid-column: 1 / -1; }
+.alt-name { display: block; font-size: 0.8rem; font-weight: 400; color: var(--ink-dim); font-stretch: 92%; }
 .tuning-row summary { cursor: pointer; color: var(--ink-dim); font-size: 0.86rem; width: fit-content; }
 .tuning-row details p { margin: 6px 0 2px; max-width: 64ch; font-size: 0.94rem; }
 .tuning-row .src { font-size: 0.8rem; color: var(--ink-dim); }
@@ -323,6 +348,8 @@ main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px
 .field { display: grid; gap: 6px; margin: 16px 0; }
 .field label, .field-label { font-weight: 500; display: flex; justify-content: space-between; gap: 12px; max-width: 520px; }
 .field output { color: var(--brass); font-stretch: 92%; }
+.label-alt { color: var(--ink-dim); font-weight: 400; font-stretch: 92%; }
+.term-example { color: var(--ink); font-stretch: 92%; }
 .field input[type='range'] { width: 100%; max-width: 520px; accent-color: var(--brass); }
 .field select { max-width: 320px; }
 .field .seg, .field .btn, .field .swatches { justify-self: start; }
@@ -356,7 +383,8 @@ main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px
 /* ── Wide screens ────────────────────────────────────────────────────── */
 @media (min-width: 960px) {
   :root { --tabbar-h: 0px; }
-  .topbar { grid-template-columns: auto 1fr auto auto; padding: 16px 28px 8px; gap: 24px; }
+  .topbar { display: grid; grid-template-columns: auto 1fr auto auto; padding: 16px 28px 8px; gap: 24px; }
+  .chips { margin-left: 0; }
   .brand { display: flex; }
   .chips { order: 3; }
   .tabs {

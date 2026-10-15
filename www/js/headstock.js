@@ -41,6 +41,11 @@ export class Headstock {
     this.build();
   }
 
+  setGroupLabel(text) {
+    this.groupLabel = text;
+    if (this.svg) this.svg.setAttribute('aria-label', text);
+  }
+
   setLayout(layout) {
     if (layout === this.layout) return;
     this.layout = LAYOUTS[layout] ? layout : '3+3';
@@ -85,6 +90,7 @@ export class Headstock {
       this.labels.push(t);
     });
     this.svg = svg;
+    if (this.groupLabel) svg.setAttribute('aria-label', this.groupLabel);
     this.container.appendChild(svg);
   }
 
@@ -108,7 +114,8 @@ export class Headstock {
       b.classList.toggle('is-locked', i === st.locked);
       b.classList.toggle('is-tuned', !!st.tuned[i]);
       b.setAttribute('aria-pressed', i === st.locked ? 'true' : 'false');
-      b.setAttribute('aria-label', `String ${6 - i}, ${txt}${st.tuned[i] ? ', tuned' : ''}${i === st.locked ? ', locked' : ''}`);
+      const aria = st.aria ? st.aria[i] : `String ${6 - i}, ${txt}${st.tuned[i] ? ', tuned' : ''}${i === st.locked ? ', locked' : ''}`;
+      if (b.getAttribute('aria-label') !== aria) b.setAttribute('aria-label', aria);
     });
     this.strings.forEach((line, i) => {
       const y = STRING_Y(i);
