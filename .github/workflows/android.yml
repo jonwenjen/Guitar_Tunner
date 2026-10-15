@@ -32,6 +32,11 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+      - name: Check the APK asks for the microphone
+        run: |
+          AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2"
+          "$AAPT2" dump permissions android/app/build/outputs/apk/debug/app-debug.apk | tee perms.txt
+          grep -q 'android.permission.RECORD_AUDIO' perms.txt
       - uses: actions/upload-artifact@v7
         with:
           name: strobe-tuner-debug-apk

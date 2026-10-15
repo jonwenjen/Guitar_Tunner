@@ -30,6 +30,7 @@ jobs:
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' build/Build/Products/Debug-iphonesimulator/App.app/Info.plist
           cd build/Build/Products/Debug-iphonesimulator && zip -qr "$GITHUB_WORKSPACE/StrobeTuner-simulator.zip" App.app
       - uses: actions/upload-artifact@v7
         with:
