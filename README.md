@@ -24,7 +24,7 @@ A true-strobe guitar tuner for the web, Android and iOS, modelled on the feature
 npm start            # zero-dependency server at http://localhost:8080
 ```
 
-To publish on GitHub Pages: Settings → Pages → Source: GitHub Actions, then run the **Publish web app** workflow. The site installs as an app (PWA) and works offline.
+**Live site:** <https://jonwenjen.github.io/Guitar_Tunner/> — published from `main` by the **Publish web app** workflow on every push that changes `www/`. (One-time setup: Settings → Pages → Source: GitHub Actions.) The site installs as an app (PWA) and works offline.
 
 **Android and iOS.** The same `www/` folder is wrapped with [Capacitor](https://capacitorjs.com/) 8. Every push to `main` builds them in GitHub Actions:
 
