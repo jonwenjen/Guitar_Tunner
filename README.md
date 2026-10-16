@@ -27,9 +27,11 @@ npm start            # zero-dependency server at http://localhost:8080
 
 **Live site:** <https://jonwenjen.github.io/Guitar_Tunner/> — published from `main` by the **Publish web app** workflow on every push that changes `www/`. (One-time setup: Settings → Pages → Source: GitHub Actions.) The site installs as an app (PWA) and works offline.
 
-**Android and iOS.** The same `www/` folder is wrapped with [Capacitor](https://capacitorjs.com/) 8. Every push to `main` builds them in GitHub Actions:
+**Android app:** on your phone, download <https://github.com/jonwenjen/Guitar_Tunner/releases/latest/download/strobe-tuner.apk>, open it and allow installing from this source. It is a test build signed with the public key in `ci/`; newer versions install over older ones.
 
-- **Android APK** workflow → artifact `strobe-tuner-debug-apk` (install on a phone with "Install unknown apps" allowed).
+**Android and iOS builds.** The same `www/` folder is wrapped with [Capacitor](https://capacitorjs.com/) 8. Every push to `main` builds them in GitHub Actions:
+
+- **Android APK** workflow → a new GitHub Release with `strobe-tuner.apk` (the three newest are kept), plus a run artifact.
 - **iOS simulator build** workflow → artifact `strobe-tuner-ios-simulator` (unsigned; drag `App.app` onto a running simulator).
 
 Build locally:

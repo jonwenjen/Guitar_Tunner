@@ -3,8 +3,11 @@ name: Android APK
 on:
   push:
     branches: [main]
-    paths: ['www/**', 'capacitor.config.json', 'package.json', 'scripts/**', 'assets/**', '.github/workflows/android.yml']
+    paths: ['www/**', 'capacitor.config.json', 'package.json', 'scripts/**', 'assets/**', 'ci/**', '.github/workflows/android.yml']
   workflow_dispatch:
+
+permissions:
+  contents: write   # publish the APK to GitHub Releases
 
 jobs:
   apk:
@@ -29,6 +32,12 @@ jobs:
         run: npx capacitor-assets generate --android --iconBackgroundColor "#3a2517" --iconBackgroundColorDark "#3a2517" --splashBackgroundColor "#3a2517" --splashBackgroundColorDark "#3a2517"
       - name: Copy web app into the project
         run: npx cap sync android && node scripts/patch-native.mjs
+      - name: Use the fixed signing key and number this build
+        run: |
+          mkdir -p ~/.android
+          cp ci/debug.keystore ~/.android/debug.keystore
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/; s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
@@ -42,3 +51,24 @@ jobs:
           name: strobe-tuner-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish to GitHub Releases
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk strobe-tuner.apk
+          VERSION="1.0.${{ github.run_number }}"
+          cat > notes.md <<NOTES
+          **Android 安裝檔 / Android installer — Strobe Tuner ${VERSION}**
+
+          1. 在手機上下載 \`strobe-tuner.apk\` / Download \`strobe-tuner.apk\` on your phone.
+          2. 打開檔案，允許「安裝不明應用程式」後安裝 / Open it and allow installs from this source.
+
+          測試版，未上架 Google Play；之後的版本可直接覆蓋安裝。
+          Test build, not from Google Play; later versions install over this one.
+          NOTES
+          gh release create "android-v${VERSION}" strobe-tuner.apk \
+            --title "Strobe Tuner Android ${VERSION}" --notes-file notes.md --target "${{ github.sha }}" --latest
+          # Keep the three newest Android releases.
+          gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("android-v"))] | .[3:] | .[].tagName' \
+            | xargs -r -I{} gh release delete {} --cleanup-tag --yes
