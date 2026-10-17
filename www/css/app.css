@@ -448,6 +448,34 @@ main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px
 .srow.is-unsure .srow-gauge i { opacity: 0.55; }
 .srow.is-unsure .srow-val { color: var(--ink-dim); }
 .srow.is-na .srow-val { color: var(--ink-dim); font-size: 0.82rem; white-space: normal; line-height: 1.2; }
+/* Tune board: each row is a button with a second line of advice. */
+.srow.srow-tap { display: block; min-height: 0; }
+.srow-btn {
+  appearance: none; border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+  display: grid; grid-template-columns: 5.6em 1fr 6.4em; align-items: center; column-gap: 10px; row-gap: 2px;
+  width: calc(100% + 16px); margin: 0 -8px; padding: 5px 8px; border-radius: 10px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.srow-btn:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.srow-btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 0; }
+.srow-advice { grid-column: 2 / -1; font-size: 0.8rem; line-height: 1.25; color: var(--ink-dim); min-height: 0; }
+.srow-advice:empty { display: none; }
+.srow.is-off .srow-advice { color: var(--light); }
+.srow.is-ok .srow-advice { color: var(--patina); }
+html[data-theme='daylight'] .srow.is-off .srow-advice { color: #b0470c; }
+.srow.is-unsure .srow-advice, .srow.is-na .srow-advice { color: var(--ink-dim); }
+.srow.is-focus .srow-btn {
+  background: color-mix(in srgb, var(--brass) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brass) 60%, transparent);
+}
+.srow.is-focus .srow-name { color: var(--ink); font-weight: 600; }
+.srow.is-live .srow-gauge { box-shadow: 0 0 0 2px color-mix(in srgb, var(--light) 35%, transparent); }
+.srow.is-live.is-ok .srow-gauge { box-shadow: 0 0 0 2px color-mix(in srgb, var(--patina) 40%, transparent); }
+.srow-gauge i { transition: left 90ms linear; }
+.srow-gauge i.is-edge { border-radius: 3px; width: 8px; margin-left: -4px; }
+.strum-plan { margin: 2px 0 0; font-size: 0.86rem; line-height: 1.45; color: var(--ink-dim); white-space: pre-line; }
+.strum-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .srow-gauge i { transition: none; } }
 
 /* ── Guitar profiles (Sweeten) ───────────────────────────────────────── */
 .fit-block { margin: 6px 0 4px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 14px; background: var(--wood-2); }
@@ -502,5 +530,6 @@ html[data-theme='daylight'] .fit-table td.is-warn { color: #b0470c; }
 @media (max-width: 420px) {
   .offset-list { grid-template-columns: repeat(2, 1fr); }
   .srow { grid-template-columns: 4.8em 1fr 5.8em; gap: 8px; }
+  .srow-btn { grid-template-columns: 4.8em 1fr 5.8em; column-gap: 8px; }
 }
 .btn:disabled { opacity: 0.45; cursor: default; }

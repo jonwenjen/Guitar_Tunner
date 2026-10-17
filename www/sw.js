@@ -1,5 +1,5 @@
 // Offline cache for the web version. Bump VERSION when files change.
-const VERSION = 'strobe-tuner-v3';
+const VERSION = 'strobe-tuner-v4';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'fonts/saira-var.woff', 'fonts/music-symbols.woff',
   'locales/en.js', 'locales/zh-TW.js', 'locales/ja.js', 'locales/ko.js', 'locales/es.js', 'locales/de.js', 'js/i18n.js',

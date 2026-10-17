@@ -11,7 +11,7 @@ A true-strobe guitar tuner for the web, Android and iOS, modelled on the feature
 
 - **True strobe display.** Four rings follow the fundamental and the 2nd–4th harmonics. Clockwise means sharp, anticlockwise flat, and the speed is the error. The reading comes from heterodyning against the target (like a spinning strobe disc), not from FFT bins.
 - **Six-string recognition.** Pluck any open string: the app finds which string it is, highlights its tuner on a 3+3 or 6-in-line headstock, tells you to tighten or loosen, and ticks each string off once it holds steady. Tap a tuner to lock that string.
-- **Strum check.** Strum all six strings once: the app reads every string from the single chord — any tuning, not just standard and drop — and shows how far each is off. Strings whose overtones collide with another string's (octave-doubled strings in open tunings) are marked *pluck alone* instead of guessed.
+- **Strum check you can tune from.** Strum all six strings once: the app reads every string from the single chord — any tuning, not just standard and drop — and tells you, per string, which way to turn and roughly how far. Then pluck any string and its row follows live; tap a row to lock the tuner on it, or press *Guide me* to be taken through each string that needs work, low to high, ending with a reminder to strum again (tuning one string shifts the neck tension). Strings whose overtones collide with another string's are marked *pluck alone* instead of guessed.
 - **Fit this guitar.** Every guitar's compensation is different. Four strums (open strings, then a barre at frets 2, 7 and 12) measure this guitar's fretting error on every string, give saddle advice in millimetres, and compute the open-string offsets that suit this instrument in the current tuning — from "match other instruments" to "sweetest chords", using its own measured overtones. Save several guitars.
 - **Sweetened tunings.** Just-chord sweetener for open and modal tunings, a least-squares open-chord fit for standard shapes, a measured strobe-style "GTR" preset, and fully custom open-string plus 12th-fret offsets (the Buzz Feiten structure). A sweetness control sets how far each moves from equal temperament.
 - **Temperaments.** Equal, Pythagorean, just major, ¼-comma meantone, Werckmeister III, Kirnberger III, Young II and Kellner in any key — the Strobe Center 5000-II set, computed from their definitions.
@@ -96,7 +96,7 @@ assets/              icon and splash sources for the native apps
 ## Tests
 
 ```bash
-npm test             # 49 tests: detection on every string, strobe accuracy, string ID in all 35 tunings,
+npm test             # 50 tests: detection on every string, strobe accuracy, string ID in all 35 tunings,
                      # temperament tables, sweetener values, targets with capo/A4/sweeteners, one-strum
                      # readings (standard, drop, open, barre, muted), the guitar-fit model and optimiser,
                      # and that every language translates every string in all term modes

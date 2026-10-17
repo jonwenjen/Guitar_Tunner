@@ -90,8 +90,13 @@
             </div>
             <p class="strum-status" id="strumStatus" aria-live="polite"></p>
             <ol class="strum-rows" id="strumRows"></ol>
+            <p class="strum-plan" id="strumPlan" hidden></p>
             <p class="note" id="strumHint" hidden data-i18n="strum.hint"></p>
-            <div class="row"><button class="btn" type="button" id="strumAgain" data-i18n="strum.again" hidden>Strum again</button></div>
+            <div class="row strum-actions">
+              <button class="btn is-on" type="button" id="strumGuide" data-i18n="board.guide" hidden>Guide me</button>
+              <button class="btn" type="button" id="strumStop" data-i18n="board.stopGuide" hidden>Stop guide</button>
+              <button class="btn" type="button" id="strumAgain" data-i18n="strum.again" hidden>Strum again</button>
+            </div>
           </section>
           <p class="sweet-line" id="sweetLine"></p>
         </div>

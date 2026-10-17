@@ -104,3 +104,20 @@ test('profile measured in standard rescales for a lower tuning', () => {
   // Low string dropped E → D: less tension, more fretting sharpness, larger correction.
   assert.ok(b.open[0] < a.open[0] - 0.05, `${b.open[0]} vs ${a.open[0]}`);
 });
+
+test('tune board advice: direction, size band, and strings that need a single pluck', async () => {
+  const { boardAdvice, needsWork } = await import('../www/js/fit-ui.js');
+  const t = (k, p = {}) => (k === 'board.advice' ? `${p.dir}|${p.size}` : k);
+  assert.equal(boardAdvice({ state: 'ok', cents: 0.6 }, 1, t), 'board.ok');
+  assert.equal(boardAdvice({ state: 'ok', cents: -2.6 }, 1, t), 'board.tighten|board.size.tiny');
+  assert.equal(boardAdvice({ state: 'live', cents: 3.6 }, 1, t), 'board.loosen|board.size.tiny');
+  assert.equal(boardAdvice({ state: 'ok', cents: 12 }, 1, t), 'board.loosen|board.size.small');
+  assert.equal(boardAdvice({ state: 'ok', cents: -35 }, 1, t), 'board.tighten|board.size.big');
+  assert.equal(boardAdvice({ state: 'unsure', cents: -0.4 }, 1, t), 'board.check');
+  assert.equal(boardAdvice({ state: 'unsure', cents: -2.6 }, 1, t), 'board.tighten|board.size.tiny · board.check');
+  assert.equal(boardAdvice({ state: 'shared', cents: null }, 1, t), 'board.pluck');
+  assert.equal(needsWork({ state: 'ok', cents: 0.9 }, 1), false);
+  assert.equal(needsWork({ state: 'live', cents: -1.2 }, 1), true);
+  assert.equal(needsWork({ state: 'unsure', cents: 0 }, 1), true);
+  assert.equal(needsWork({ state: 'silent', cents: null }, 1), true);
+});

@@ -12,7 +12,7 @@ import { SWEETENERS, findSweetener, sweetenerOffsets } from './sweeteners.js';
 import { TEMPERAMENTS } from './temperaments.js';
 import { REFERENCES } from './references.js';
 import { LEARN_REFS } from './learn.js';
-import { captureStrum, analyzeLater, renderStrumRows, openWizard, fitTableHtml } from './fit-ui.js';
+import { captureStrum, analyzeLater, openWizard, fitTableHtml, renderTuneBoard, updateTuneRow, needsWork } from './fit-ui.js';
 import { DEFAULT_B } from './poly.js';
 import { loadSettings, saveSettings, DEFAULTS } from './store.js';
 import { parseNote, octaveOf, cents as centsOf, freqToMidi, noteLabel as noteLabelIntl } from './music.js';
@@ -60,7 +60,6 @@ let srLast = '';
 let micError = null; // key of the last microphone error, re-rendered on language change
 const blockListeners = new Set(); // strum captures listening to the raw input
 let strumSession = null;          // active strum check on the Tune tab
-let strumResult = null;
 let strumBusy = false;            // pauses the live instruction text while a strum check runs
 
 const view = new StrobeView($('#strobe'));
@@ -89,6 +88,7 @@ function nameOf(tuning) {
 }
 
 function recompute() {
+  const before = targets.map((x) => x.freq);
   const tuning = currentTuning();
   sweet = sweetenerOffsets(findSweetener(S.sweetenerId), tuning, { sweetness: S.sweetness, anchor: S.anchor, custom: S.custom, profile: currentProfile() });
   targets = computeTargets({
@@ -96,6 +96,8 @@ function recompute() {
     temperament: currentTemperament(), temperamentRoot: S.temperamentRoot, sweet, flats: useFlats(tuning),
   });
   tracker.reset();
+  // Board readings are relative to the old targets: close it if any target moved.
+  if (board && targets.some((x, i) => !before[i] || Math.abs(centsOf(x.freq, before[i])) > 0.01)) cancelStrumCheck(true);
 }
 
 function targetFreq(i) {
@@ -237,7 +239,10 @@ function loop(now) {
 
   // Tuned ticks.
   if (reading && reading.sounding && S.mode !== 'chromatic' && activeString >= 0 && reading.cents !== null) {
-    if (tunedTracker.update(activeString, reading.cents, dt, S.tolerance)) announce(t('sr.tuned', { string: stringName(activeString) }));
+    if (tunedTracker.update(activeString, reading.cents, dt, S.tolerance)) {
+      announce(t('sr.tuned', { string: stringName(activeString) }));
+      boardTuned(activeString);
+    }
   }
 
   const strobeOn = !!(reading && reading.sounding);
@@ -246,6 +251,7 @@ function loop(now) {
     active: strobeOn, cents: reading ? reading.cents : null, tolerance: S.tolerance,
   });
   renderReadout(reading, level);
+  boardLive(reading, now);
   requestAnimationFrame(loop);
 }
 
@@ -409,6 +415,7 @@ function setMode(mode) {
   tracker.reset();
   persist();
   $$('[data-mode]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
+  syncBoardMode();
 }
 
 function showView(name) {
@@ -459,35 +466,233 @@ function setCapo(n) {
   renderHeader();
 }
 
-// ── Strum check ────────────────────────────────────────────────────────
+// ── Strum check and tune board ─────────────────────────────────────────
+// One strum fills the board; then each string can be tuned on its own. A single
+// plucked string reads with McLeod clarity ≥ 0.98 while a ringing chord stays below
+// 0.6, so rows only take live readings that are clearly one string.
+const LIVE_CLARITY = 0.93;
+const LIVE_SETTLE_MS = 250;
+let board = null;      // { rows, focus, live, guided, finished, queue, prev }
+let boardBusy = false; // true while the board itself changes the tuner mode
+let boardTick = 0;
+let guideTimer = 0;
+
 function strumLabels() {
   return targets.map((x, i) => `${stringShort(i)} · ${noteLabel(x.midi, useFlats())}`);
 }
+const boardTol = () => Math.max(S.tolerance, 1);
+function boardOpts() {
+  return {
+    labels: strumLabels(), tolerance: boardTol(), t, fmtSigned, stringName,
+    focus: board ? board.focus : -1, live: board ? board.live : -1,
+  };
+}
 
+function ensurePanelVisible() {
+  const panel = $('#strumPanel');
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  // Wait two frames so the readout above has re-laid out before measuring.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (panel.hidden) return;
+    // 'nearest' ignores scroll-margin in Chromium, so decide here whether the panel
+    // is hidden under the tab bar and align its end (or start, if it is taller).
+    const r = panel.getBoundingClientRect();
+    const limit = window.innerHeight - (parseFloat(getComputedStyle(panel).scrollMarginBottom) || 0);
+    if (r.bottom > limit || r.top < 0) {
+      panel.scrollIntoView({ block: r.height > limit - 12 ? 'start' : 'end', behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }));
+}
+
+/** Panel while a strum is being captured or analysed (no board yet). */
 function renderStrumPanel(status) {
   const panel = $('#strumPanel');
   const opening = panel.hidden;
   panel.hidden = false;
+  if (board) { renderBoard(); if (opening) ensurePanelVisible(); return; }
   if (status !== undefined) $('#strumStatus').textContent = status;
-  renderStrumRows($('#strumRows'), strumResult ? strumResult.strings : null, {
-    labels: strumLabels(), mode: 'tune', tolerance: Math.max(S.tolerance, 1), t, fmtSigned, stringName,
-  });
-  const needsSingle = !!strumResult && strumResult.strings.some((x) => x.state === 'shared' || x.state === 'unsure');
-  $('#strumHint').hidden = !needsSingle;
-  if (opening || (strumResult && status !== undefined)) {
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    // Wait two frames so the readout above has re-laid out before measuring.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (panel.hidden) return;
-      // 'nearest' ignores scroll-margin in Chromium, so decide here whether the panel
-      // is hidden under the tab bar and align its end (or start, if it is taller).
-      const r = panel.getBoundingClientRect();
-      const limit = window.innerHeight - (parseFloat(getComputedStyle(panel).scrollMarginBottom) || 0);
-      if (r.bottom > limit || r.top < 0) {
-        panel.scrollIntoView({ block: r.height > limit - 12 ? 'start' : 'end', behavior: reduce ? 'auto' : 'smooth' });
-      }
-    }));
+  renderTuneBoard($('#strumRows'), targets.map(() => null), boardOpts());
+  $('#strumPlan').hidden = true;
+  $('#strumHint').hidden = true;
+  $('#strumGuide').hidden = true;
+  $('#strumStop').hidden = true;
+  if (opening) ensurePanelVisible();
+}
+
+function boardStatus() {
+  const tol = boardTol();
+  if (board.guided) {
+    if (board.finished) return t('board.allDone');
+    const i = board.focus;
+    return t('board.now', { string: stringName(i), i: board.queue.indexOf(i) + 1, n: board.queue.length });
   }
+  if (board.focus >= 0) return t('board.focused', { string: stringName(board.focus) });
+  const read = board.rows.filter((r) => r && (r.state === 'ok' || r.state === 'live'));
+  const ok = read.filter((r) => Math.abs(r.cents) <= tol).length;
+  return t('strum.summary', { ok, read: read.length, tol: fmt(tol, tol % 1 ? 1 : 0) });
+}
+
+function boardPlan() {
+  const tol = boardTol();
+  if (board.guided) return board.finished ? t('board.retune') : '';
+  const todo = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol));
+  if (!todo.length) return t('board.allGood');
+  if (board.focus >= 0) return t('board.retune');
+  return `${t('board.order', { list: todo.map((i) => stringShort(i)).join(' → ') })}\n${t('board.retune')}`;
+}
+
+/** Full redraw of the board: rows, status, advice and buttons. */
+function renderBoard() {
+  if (!board) return;
+  const tol = boardTol();
+  renderTuneBoard($('#strumRows'), board.rows, boardOpts());
+  refreshBoardText();
+  const todo = board.rows.some((r) => needsWork(r, tol));
+  $('#strumGuide').hidden = board.guided || !todo;
+  $('#strumStop').hidden = !board.guided || board.finished;
+  $('#strumAgain').hidden = false;
+  $('#strumAgain').classList.toggle('is-on', !todo || board.finished);
+  $('#strumHint').hidden = !board.rows.some((r) => r && (r.state === 'shared' || r.state === 'unsure'));
+}
+
+function refreshBoardText() {
+  const status = boardStatus();
+  const statusEl = $('#strumStatus');
+  if (statusEl.textContent !== status) statusEl.textContent = status;
+  const plan = boardPlan();
+  const planEl = $('#strumPlan');
+  planEl.hidden = !plan;
+  if (planEl.textContent !== plan) planEl.textContent = plan;
+}
+
+/** Called every animation frame: feed a clean single-string reading into its row. */
+function boardLive(reading, now) {
+  if (!board || strumBusy) return;
+  let live = -1;
+  const clean = reading && reading.sounding && reading.cents !== null && activeString >= 0
+    && S.mode !== 'chromatic' && !S.intonation && engine?.ref
+    && lastMpm && lastMpm.freq && lastMpm.clarity >= LIVE_CLARITY
+    && Math.abs(centsOf(lastMpm.freq, engine.ref)) < 60 && Math.abs(reading.cents) < 60;
+  // Skip the pluck's attack: take readings only once the string has read cleanly for a moment.
+  const cand = clean ? activeString : -1;
+  if (cand !== board.cand) { board.cand = cand; board.candAt = now; }
+  if (cand >= 0 && now - board.candAt >= LIVE_SETTLE_MS) {
+    live = cand;
+    const prev = board.rows[live];
+    board.rows[live] = { cents: reading.cents, state: 'live', done: prev ? !!prev.done : false };
+  }
+  const changedRow = live !== board.live;
+  const was = board.live;
+  board.live = live;
+  if (!changedRow && now - boardTick < 66) return; // ~15 updates a second is plenty
+  boardTick = now;
+  const o = boardOpts();
+  const el = $('#strumRows');
+  if (was >= 0 && was !== live) updateTuneRow(el, was, board.rows[was], o);
+  if (live >= 0) updateTuneRow(el, live, board.rows[live], o);
+  if (changedRow || live >= 0) {
+    refreshBoardText();
+    const todo = board.rows.some((r) => needsWork(r, boardTol()));
+    $('#strumGuide').hidden = board.guided || !todo;
+    $('#strumAgain').classList.toggle('is-on', !todo || board.finished);
+    $('#strumHint').hidden = !board.rows.some((r) => r && (r.state === 'shared' || r.state === 'unsure'));
+  }
+}
+
+/** The tuned tracker confirmed a string (held in tolerance): advance the guide. */
+function boardTuned(i) {
+  if (!board || board.live !== i) return;
+  board.rows[i].done = true;
+  if (board.guided && board.focus === i) {
+    clearTimeout(guideTimer);
+    guideTimer = setTimeout(() => { if (board && board.guided && board.focus === i) guideNext(); }, 900);
+  }
+}
+
+function boardFocus(i) {
+  if (!board) return;
+  if (!board.prev) board.prev = { mode: S.mode, locked: lockedString };
+  board.focus = i;
+  boardBusy = true;
+  lockedString = i;
+  activeString = i;
+  setMode('manual');
+  boardBusy = false;
+  if (engine) engine.setReference(targetFreq(i));
+  tunedTracker.tuned[i] = false;
+  tunedTracker.timeIn[i] = 0;
+  if (board.rows[i]) board.rows[i].done = false;
+  renderBoard();
+  if (tone.playing) tone.play(targetFreq(i));
+}
+
+/** Give the tuner back the mode it had before the board took over. */
+function boardRelease() {
+  if (!board) return;
+  clearTimeout(guideTimer);
+  board.focus = -1;
+  if (board.prev) {
+    const { mode, locked } = board.prev;
+    board.prev = null;
+    boardBusy = true;
+    lockedString = mode === 'manual' ? locked : -1;
+    setMode(mode);
+    boardBusy = false;
+  }
+}
+
+function startGuide() {
+  if (!board) return;
+  const tol = boardTol();
+  board.queue = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol));
+  if (!board.queue.length) return;
+  board.guided = true;
+  board.finished = false;
+  boardFocus(board.queue[0]);
+}
+
+function guideNext() {
+  const at = board.queue.indexOf(board.focus);
+  const order = at < 0 ? board.queue : [...board.queue.slice(at + 1), ...board.queue.slice(0, at)];
+  const next = order.find((i) => !(board.rows[i] && board.rows[i].done));
+  if (next === undefined) {
+    board.finished = true;
+    boardRelease();
+    renderBoard();
+    announce(t('board.allDone'));
+    return;
+  }
+  boardFocus(next);
+}
+
+function stopGuide() {
+  if (!board) return;
+  board.guided = false;
+  board.finished = false;
+  boardRelease();
+  renderBoard();
+}
+
+function onBoardTap(e) {
+  const li = e.target.closest('[data-i]');
+  if (!li || !board) return;
+  const i = Number(li.dataset.i);
+  if (board.guided) {
+    if (board.finished) { board.guided = false; board.finished = false; }
+    else if (!board.queue.includes(i)) board.queue.splice(board.queue.indexOf(board.focus) + 1, 0, i);
+    boardFocus(i);
+    return;
+  }
+  if (board.focus === i) { boardRelease(); renderBoard(); } else boardFocus(i);
+}
+
+/** Keep the board in step when the user changes the tuner mode or taps the headstock. */
+function syncBoardMode() {
+  if (!board || boardBusy) return;
+  board.prev = null; // the user took control of the mode
+  board.focus = S.mode === 'manual' ? lockedString : -1;
+  if (board.guided && S.mode !== 'manual') { board.guided = false; board.finished = false; }
+  renderBoard();
 }
 
 async function startStrumCheck() {
@@ -496,9 +701,10 @@ async function startStrumCheck() {
     if (!mic.running) return;
   }
   cancelStrumCheck(false);
-  strumResult = null;
+  if (board) { stopGuide(); board = null; }
   strumBusy = true;
   $('#strumAgain').hidden = true;
+  $('#strumAgain').classList.remove('is-on');
   const prompt = t('strum.listen');
   renderStrumPanel(prompt);
   $('#instruction').className = 'instruction';
@@ -522,17 +728,21 @@ async function startStrumCheck() {
   strumBusy = false;
   $('#strumAgain').hidden = false;
   if (!res.ok) { renderStrumPanel(t('strum.timeout')); return; }
-  strumResult = res;
   // Tick the strings the strum confirmed, clear the ones it found out of tune.
-  const tol = Math.max(S.tolerance, 1);
+  const tol = boardTol();
   res.strings.forEach((x, i) => {
     if (x.state !== 'ok') return;
     tunedTracker.tuned[i] = Math.abs(x.cents) <= tol;
     tunedTracker.timeIn[i] = 0;
   });
-  const read = res.strings.filter((x) => x.state === 'ok');
-  const ok = read.filter((x) => Math.abs(x.cents) <= tol).length;
-  renderStrumPanel(t('strum.summary', { ok, read: read.length, tol: fmt(tol, tol % 1 ? 1 : 0) }));
+  board = {
+    rows: res.strings.map((x) => ({
+      cents: x.state === 'ok' || x.state === 'unsure' ? x.cents : null, state: x.state, done: false,
+    })),
+    focus: -1, live: -1, cand: -1, candAt: 0, guided: false, finished: false, queue: [], prev: null,
+  };
+  renderBoard();
+  ensurePanelVisible();
 }
 
 function cancelStrumCheck(hide = true) {
@@ -540,8 +750,9 @@ function cancelStrumCheck(hide = true) {
   strumSession = null;
   strumBusy = false;
   if (hide) {
+    if (board) { board.guided = false; boardRelease(); }
+    board = null;
     $('#strumPanel').hidden = true;
-    strumResult = null;
   }
 }
 
@@ -602,6 +813,9 @@ function bindFit() {
   $('#strumBtn').addEventListener('click', startStrumCheck);
   $('#strumAgain').addEventListener('click', startStrumCheck);
   $('#strumClose').addEventListener('click', () => cancelStrumCheck(true));
+  $('#strumRows').addEventListener('click', onBoardTap);
+  $('#strumGuide').addEventListener('click', startGuide);
+  $('#strumStop').addEventListener('click', stopGuide);
   $('#fitMeasure').addEventListener('click', startWizard);
   $('#fitSelect').addEventListener('change', (e) => {
     S.guitarId = e.target.value;

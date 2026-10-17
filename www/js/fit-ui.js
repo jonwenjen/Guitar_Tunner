@@ -80,6 +80,88 @@ export function renderStrumRows(el, strings, o) {
   }).join('');
 }
 
+// ── Tune board (strum check you can tune from) ──────────────────────────
+
+/** True when a board row still needs work: off by more than the tolerance, or not read reliably. */
+export function needsWork(row, tol) {
+  if (!row) return true;
+  if (row.state === 'shared' || row.state === 'silent' || row.state === 'unsure') return true;
+  return !(Math.abs(row.cents) <= tol);
+}
+
+/**
+ * Plain-language advice for one string: which way to turn and roughly how far.
+ * Sizes are bands, not peg angles — the turn per cent depends on the gear ratio,
+ * post diameter and string, which the app cannot know.
+ */
+export function boardAdvice(row, tol, t) {
+  if (!row) return '';
+  if (row.state === 'shared' || row.state === 'silent') return t('board.pluck');
+  const c = row.cents;
+  if (Math.abs(c) <= tol) return row.state === 'unsure' ? t('board.check') : t('board.ok');
+  const a = Math.abs(c);
+  const advice = t('board.advice', {
+    dir: c > 0 ? t('board.loosen') : t('board.tighten'),
+    size: a <= 5 ? t('board.size.tiny') : a <= 20 ? t('board.size.small') : t('board.size.big'),
+  });
+  return row.state === 'unsure' ? `${advice} · ${t('board.check')}` : advice;
+}
+
+const BOARD_RANGE = 10;
+
+/** Draw the six board rows as buttons; update them later with updateTuneRow. */
+export function renderTuneBoard(el, rows, o) {
+  const tol = (o.tolerance / BOARD_RANGE) * 50;
+  el.innerHTML = o.labels.map((label, i) => `<li class="srow srow-tap" data-i="${i}">
+      <button type="button" class="srow-btn">
+        <span class="srow-name">${esc(label)}</span>
+        <span class="srow-gauge" aria-hidden="true"><b style="left:${50 - tol}%;width:${2 * tol}%"></b><s></s><i hidden></i></span>
+        <span class="srow-val">—</span>
+        <span class="srow-advice"></span>
+      </button>
+    </li>`).join('');
+  rows.forEach((row, i) => updateTuneRow(el, i, row, o));
+}
+
+/** Update one row in place (cheap enough to call many times a second for the live row). */
+export function updateTuneRow(el, i, row, o) {
+  const li = el.children[i];
+  if (!li) return;
+  const btn = li.firstElementChild;
+  const dot = li.querySelector('.srow-gauge i');
+  const valEl = li.querySelector('.srow-val');
+  const advEl = li.querySelector('.srow-advice');
+  const cls = ['srow', 'srow-tap'];
+  let val = '—';
+  if (row) {
+    const hasValue = row.state === 'ok' || row.state === 'unsure' || row.state === 'live';
+    if (hasValue) {
+      const c = row.cents;
+      cls.push(Math.abs(c) <= o.tolerance ? 'is-ok' : 'is-off');
+      if (row.state === 'unsure') cls.push('is-unsure');
+      val = `${row.state === 'unsure' ? '≈ ' : ''}${o.fmtSigned(c, 1)} ¢`;
+      const pos = 50 + (Math.max(-BOARD_RANGE, Math.min(BOARD_RANGE, c)) / BOARD_RANGE) * 50;
+      dot.hidden = false;
+      dot.style.left = `${pos}%`;
+      dot.classList.toggle('is-edge', Math.abs(c) > BOARD_RANGE);
+    } else {
+      cls.push('is-na');
+      dot.hidden = true;
+    }
+  } else {
+    dot.hidden = true;
+  }
+  if (o.focus === i) cls.push('is-focus');
+  if (o.live === i) cls.push('is-live');
+  const className = cls.join(' ');
+  if (li.className !== className) li.className = className;
+  if (valEl.textContent !== val) valEl.textContent = val;
+  const advice = row ? boardAdvice(row, o.tolerance, o.t) : '';
+  if (advEl.textContent !== advice) advEl.textContent = advice;
+  btn.setAttribute('aria-pressed', String(o.focus === i));
+  btn.setAttribute('aria-label', o.t('board.rowAria', { string: o.stringName(i), value: val, advice }));
+}
+
 // ── Wizard ──────────────────────────────────────────────────────────────
 
 /**
