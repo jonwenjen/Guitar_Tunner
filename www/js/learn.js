@@ -33,6 +33,16 @@ export const ARTICLES = [
     ],
   },
   {
+    id: 'fit',
+    title: 'Fit this guitar',
+    body: [
+      'Every guitar plays fretted notes a little sharp, and by a different amount on each string: pressing a string onto a fret stretches it, more with high action, heavy strings or a stiff core (Varieschi & Gower 2010). The saddle setback cancels most of it at the 12th fret; what is left differs from one guitar to the next. “Measure a guitar” on the Sweeten tab records four strums — the open strings, then a barre at frets 2, 7 and 12 — and fits each string’s error curve.',
+      'One strum is enough to read six strings because each string’s overtones fall in different places. The analyser predicts every overtone of every string, ignores the ones two strings share — in standard tuning the high E and B fundamentals sit on overtones of the low strings, so they are read from higher overtones — and fits each string’s pitch and stiffness together. Barbancho et al. (2012) use the same inharmonicity relations to tell guitar strings apart, and polyphonic tuner designs pick partials to avoid shared harmonics. The first commercial polyphonic tuner, reviewed in 2010, quoted about ±1 cent and handled standard and drop tunings only; here any tuning works, but octave-doubled strings in open tunings are flagged “pluck alone” rather than guessed.',
+      'The best tuning for that guitar is then a least-squares problem. Each open string gets an offset so that, across the chords played in the current tuning, fretted and open notes land closest to equal temperament — or, with the goal slider towards “sweetest chords”, so that overtones shared by two strings beat as little as possible. Using the guitar’s own slightly sharp overtones follows piano research: minimising sensory dissonance (Giordano 2015) or spectral entropy (Hinrichsen 2012) with an instrument’s real overtones reproduces the stretched tuning expert tuners choose, and listeners do hear stiff-string tones as higher (Jaatinen & Pätynen 2022). The saddle advice removes the slope of the error, so after moving a saddle, measure again.',
+      'Keep expectations realistic. In a blind test with 32 experienced players and builders, Mottola (2017) found no significant preference between compensation schemes whose worst fretted notes were 1 to 8 cents off, and the same fretted note changes with finger pressure from one playing to the next (Mottola 2018). Fully adaptive just intonation, which retunes every chord as it is played (Sethares 1994; Stange, Wick & Hinrichsen 2018), needs an instrument whose pitch can move; on frets it can only be approximated. Fix the saddle first; the offsets polish what remains.',
+    ],
+  },
+  {
     id: 'intonation',
     title: 'Setting intonation with the 12th fret',
     body: [
@@ -46,4 +56,6 @@ export const LEARN_REFS = [
   'fletcher1964', 'mcleod2005', 'decheveigne2002', 'barbour1951', 'sethares2005', 'varieschi2010', 'feiten1997',
   'petersonHDC', 'petersonSC5000', 'petersonFeiten', 'umgf', 'villegas2010', 'leimu2017', 'winston', 'sethares',
   'griewank2010', 'anderson2015', 'tamm1990', 'weissman2006', 'jones2023', 'robson2023',
+  'giordano2015', 'hinrichsen2012', 'jaatinen2022', 'plomp1965', 'sethares1994', 'stange2018', 'barbancho2012',
+  'hodgkinson2010', 'polytune', 'polyPatent', 'mottola2017', 'mottola2018', 'hallhess1984', 'vos1986',
 ];

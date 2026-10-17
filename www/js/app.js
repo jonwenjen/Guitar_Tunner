@@ -12,6 +12,8 @@ import { SWEETENERS, findSweetener, sweetenerOffsets } from './sweeteners.js';
 import { TEMPERAMENTS } from './temperaments.js';
 import { REFERENCES } from './references.js';
 import { LEARN_REFS } from './learn.js';
+import { captureStrum, analyzeLater, renderStrumRows, openWizard, fitTableHtml } from './fit-ui.js';
+import { DEFAULT_B } from './poly.js';
 import { loadSettings, saveSettings, DEFAULTS } from './store.js';
 import { parseNote, octaveOf, cents as centsOf, freqToMidi, noteLabel as noteLabelIntl } from './music.js';
 import {
@@ -56,6 +58,10 @@ let lastFrameTime = performance.now();
 let wakeLock = null;
 let srLast = '';
 let micError = null; // key of the last microphone error, re-rendered on language change
+const blockListeners = new Set(); // strum captures listening to the raw input
+let strumSession = null;          // active strum check on the Tune tab
+let strumResult = null;
+let strumBusy = false;            // pauses the live instruction text while a strum check runs
 
 const view = new StrobeView($('#strobe'));
 const headstock = new Headstock($('#headstock'), { onSelect: onStringTap });
@@ -72,6 +78,9 @@ const isCustom = (tuning) => tuning.category === 'yours';
 function useFlats(tuning = currentTuning()) {
   return S.flats || tuning.notes.some((n) => /^[A-G](b|♭)/.test(n));
 }
+function currentProfile() {
+  return S.guitars.find((g) => g.id === S.guitarId) || null;
+}
 function currentTemperament() {
   return TEMPERAMENTS.find((x) => x.id === S.temperamentId) || TEMPERAMENTS[0];
 }
@@ -81,7 +90,7 @@ function nameOf(tuning) {
 
 function recompute() {
   const tuning = currentTuning();
-  sweet = sweetenerOffsets(findSweetener(S.sweetenerId), tuning, { sweetness: S.sweetness, anchor: S.anchor, custom: S.custom });
+  sweet = sweetenerOffsets(findSweetener(S.sweetenerId), tuning, { sweetness: S.sweetness, anchor: S.anchor, custom: S.custom, profile: currentProfile() });
   targets = computeTargets({
     notes: tuning.notes, a4: S.a4, globalCents: S.globalCents, capo: S.capo,
     temperament: currentTemperament(), temperamentRoot: S.temperamentRoot, sweet, flats: useFlats(tuning),
@@ -108,6 +117,12 @@ function onBlock(block) {
   }
   ringFilled = Math.min(RING, ringFilled + n);
   engine.process(block);
+  for (const fn of blockListeners) fn(block);
+}
+
+function addBlockListener(fn) {
+  blockListeners.add(fn);
+  return () => blockListeners.delete(fn);
 }
 
 function latestFrame() {
@@ -150,6 +165,7 @@ function showMicError() {
 }
 
 async function stopMic() {
+  cancelStrumCheck(false);
   await mic.stop();
   engine = null;
   $('#hub').classList.add('is-idle');
@@ -276,6 +292,11 @@ function renderReadout(reading, level) {
   else if (activeString >= 0) midi = stringMidi(activeString);
   const flats = S.mode === 'chromatic' ? S.flats : useFlats();
 
+  if (strumBusy && mic.running) {
+    // A strum check owns the instruction line until it finishes.
+    renderHeadstockOnly(reading, level);
+    return;
+  }
   if (!mic.running) {
     hubEl.classList.add('is-idle');
   } else if (midi !== null && reading) {
@@ -310,6 +331,10 @@ function renderReadout(reading, level) {
     }
   }
 
+  renderHeadstockOnly(reading, level);
+}
+
+function renderHeadstockOnly(reading, level) {
   const tuned = tunedTracker.tuned;
   headstock.update({
     labels: targets.map((_, i) => stringLabel(i)),
@@ -434,6 +459,161 @@ function setCapo(n) {
   renderHeader();
 }
 
+// ── Strum check ────────────────────────────────────────────────────────
+function strumLabels() {
+  return targets.map((x, i) => `${stringShort(i)} · ${noteLabel(x.midi, useFlats())}`);
+}
+
+function renderStrumPanel(status) {
+  const panel = $('#strumPanel');
+  const opening = panel.hidden;
+  panel.hidden = false;
+  if (status !== undefined) $('#strumStatus').textContent = status;
+  renderStrumRows($('#strumRows'), strumResult ? strumResult.strings : null, {
+    labels: strumLabels(), mode: 'tune', tolerance: Math.max(S.tolerance, 1), t, fmtSigned, stringName,
+  });
+  const needsSingle = !!strumResult && strumResult.strings.some((x) => x.state === 'shared' || x.state === 'unsure');
+  $('#strumHint').hidden = !needsSingle;
+  if (opening || (strumResult && status !== undefined)) {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // Wait two frames so the readout above has re-laid out before measuring.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (panel.hidden) return;
+      // 'nearest' ignores scroll-margin in Chromium, so decide here whether the panel
+      // is hidden under the tab bar and align its end (or start, if it is taller).
+      const r = panel.getBoundingClientRect();
+      const limit = window.innerHeight - (parseFloat(getComputedStyle(panel).scrollMarginBottom) || 0);
+      if (r.bottom > limit || r.top < 0) {
+        panel.scrollIntoView({ block: r.height > limit - 12 ? 'start' : 'end', behavior: reduce ? 'auto' : 'smooth' });
+      }
+    }));
+  }
+}
+
+async function startStrumCheck() {
+  if (!mic.running) {
+    await startMic();
+    if (!mic.running) return;
+  }
+  cancelStrumCheck(false);
+  strumResult = null;
+  strumBusy = true;
+  $('#strumAgain').hidden = true;
+  const prompt = t('strum.listen');
+  renderStrumPanel(prompt);
+  $('#instruction').className = 'instruction';
+  $('#instruction').textContent = prompt;
+  const expected = targets.map((x, i) => ({ freq: x.freq, B: DEFAULT_B[i] }));
+  const session = captureStrum({ sampleRate: () => mic.sampleRate, addBlockListener }, (st) => {
+    if (st === 'recording') $('#strumStatus').textContent = t('strum.recording');
+  });
+  strumSession = session;
+  const clip = await session.promise;
+  if (strumSession !== session) return;
+  strumSession = null;
+  if (!clip) {
+    strumBusy = false;
+    renderStrumPanel(t('strum.timeout'));
+    $('#strumAgain').hidden = false;
+    return;
+  }
+  $('#strumStatus').textContent = t('strum.analyzing');
+  const res = await analyzeLater(clip, mic.sampleRate, expected);
+  strumBusy = false;
+  $('#strumAgain').hidden = false;
+  if (!res.ok) { renderStrumPanel(t('strum.timeout')); return; }
+  strumResult = res;
+  // Tick the strings the strum confirmed, clear the ones it found out of tune.
+  const tol = Math.max(S.tolerance, 1);
+  res.strings.forEach((x, i) => {
+    if (x.state !== 'ok') return;
+    tunedTracker.tuned[i] = Math.abs(x.cents) <= tol;
+    tunedTracker.timeIn[i] = 0;
+  });
+  const read = res.strings.filter((x) => x.state === 'ok');
+  const ok = read.filter((x) => Math.abs(x.cents) <= tol).length;
+  renderStrumPanel(t('strum.summary', { ok, read: read.length, tol: fmt(tol, tol % 1 ? 1 : 0) }));
+}
+
+function cancelStrumCheck(hide = true) {
+  if (strumSession) strumSession.cancel();
+  strumSession = null;
+  strumBusy = false;
+  if (hide) {
+    $('#strumPanel').hidden = true;
+    strumResult = null;
+  }
+}
+
+// ── Guitar profiles ────────────────────────────────────────────────────
+function openTargetsForMeasuring() {
+  // Base equal-tempered targets for the current tuning: no capo, no sweetener.
+  const tuning = currentTuning();
+  return computeTargets({
+    notes: tuning.notes, a4: S.a4, globalCents: S.globalCents, capo: 0,
+    temperament: null, temperamentRoot: 0, sweet: null, flats: useFlats(tuning),
+  }).map((x) => x.freq);
+}
+
+function startWizard() {
+  cancelStrumCheck();
+  const tuning = currentTuning();
+  openWizard({
+    t, fmt, fmtSigned, stringName, stringShort,
+    stringNote: (i, k) => noteLabel(parseNote(tuning.notes[i]) + k, useFlats(tuning)),
+    tuning: () => tuning,
+    tuningLabel: () => nameOf(tuning).text,
+    openTargets: openTargetsForMeasuring,
+    ensureMic: async () => { if (!mic.running) await startMic(); return mic.running; },
+    sampleRate: () => mic.sampleRate,
+    addBlockListener,
+    goal: () => S.sweetness,
+    existingNames: () => S.guitars.map((g) => g.name),
+    onSave: (profile) => {
+      S.guitars.push(profile);
+      S.guitarId = profile.id;
+      S.sweetenerId = 'guitar-fit';
+      persist(); recompute(); renderHeader(); renderSweeten();
+      $('#sweetNote').textContent = t('wiz.saved');
+    },
+  });
+}
+
+function renderFitBlock() {
+  const sw = findSweetener(S.sweetenerId);
+  const block = $('#fitBlock');
+  block.hidden = sw.kind !== 'profile';
+  $('#goalEnds').hidden = sw.kind !== 'profile';
+  $('#sweetnessLabel').textContent = sw.kind === 'profile' ? t('fit.goalLabel') : t('sweeten.sweetness');
+  if (block.hidden) return;
+  const sel = $('#fitSelect');
+  sel.innerHTML = S.guitars.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  sel.hidden = !S.guitars.length;
+  $('#fitDelete').hidden = !S.guitars.length;
+  $('#fitEmpty').hidden = !!S.guitars.length;
+  const prof = currentProfile();
+  if (prof) sel.value = prof.id;
+  $('#fitMeta').textContent = prof ? t('fit.measured', { date: prof.created, tuning: prof.notes.map((n) => noteName(parseNote(n), useFlats())).join(' ') }) : '';
+  $('#fitTable').innerHTML = prof ? fitTableHtml(prof, { t, fmt, fmtSigned, stringShort }) : '';
+  $('#fitSaddleNote').textContent = prof ? t('fit.saddleNote', { mm: prof.scaleMm }) : '';
+}
+
+function bindFit() {
+  $('#strumBtn').addEventListener('click', startStrumCheck);
+  $('#strumAgain').addEventListener('click', startStrumCheck);
+  $('#strumClose').addEventListener('click', () => cancelStrumCheck(true));
+  $('#fitMeasure').addEventListener('click', startWizard);
+  $('#fitSelect').addEventListener('change', (e) => {
+    S.guitarId = e.target.value;
+    persist(); recompute(); renderHeader(); renderSweeten();
+  });
+  $('#fitDelete').addEventListener('click', () => {
+    S.guitars = S.guitars.filter((g) => g.id !== S.guitarId);
+    S.guitarId = S.guitars.length ? S.guitars[S.guitars.length - 1].id : null;
+    persist(); recompute(); renderHeader(); renderSweeten();
+  });
+}
+
 // ── Static text ────────────────────────────────────────────────────────
 /** Fill every element marked with data-i18n* attributes. */
 function applyI18n() {
@@ -538,6 +718,7 @@ function shortCite(cite) {
 }
 
 function useTuning(id) {
+  cancelStrumCheck(true);
   S.tuningId = id;
   persist();
   recompute();
@@ -634,6 +815,7 @@ function renderSweeten() {
   $('#temperRoot').value = String(S.temperamentRoot);
   $('#temperRoot').disabled = S.temperamentId === 'equal';
   $('#temperAbout').textContent = temperamentAbout(currentTemperament());
+  renderFitBlock();
 }
 
 function bindSweeten() {
@@ -704,6 +886,7 @@ async function changeLanguage(code, terms) {
   applyI18n();
   renderAll();
   renderLearn();
+  if (!$('#strumPanel').hidden) renderStrumPanel();
   showMicError();
   if (mic.running && !micError) $('#instruction').textContent = idleInstruction();
 }
@@ -723,7 +906,7 @@ function bindSettings() {
   $('#flats').addEventListener('change', (e) => { S.flats = e.target.checked; afterSetting(); renderAll(); });
   $('#keepAwake').addEventListener('change', (e) => { S.keepAwake = e.target.checked; afterSetting(); if (S.keepAwake && mic.running) requestWakeLock(); else releaseWakeLock(); });
   $('#resetAll').addEventListener('click', async () => {
-    const keep = { customTunings: S.customTunings, lang: S.lang, terms: S.terms };
+    const keep = { customTunings: S.customTunings, lang: S.lang, terms: S.terms, guitars: S.guitars, guitarId: S.guitarId };
     S = { ...structuredClone(DEFAULTS), ...keep };
     persist(); recompute(); applyTheme(); renderAll();
   });
@@ -773,6 +956,7 @@ async function boot() {
   bindCustomBuilder();
   bindSweeten();
   bindSettings();
+  bindFit();
   $$('[data-tab]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.tab)));
   $$('[data-goto]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.goto)));
   $('#hub').classList.add('is-idle');

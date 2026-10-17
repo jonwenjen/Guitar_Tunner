@@ -79,9 +79,20 @@
             </div>
           </div>
           <div class="deck-row deck-tools">
+            <button class="btn" type="button" id="strumBtn" data-i18n="strum.button">Strum check</button>
             <button class="btn" type="button" id="refTone">Play reference</button>
             <button class="btn btn-quiet" type="button" id="resetTuned" data-i18n="ticks.clear">Clear ticks</button>
           </div>
+          <section class="strum-panel" id="strumPanel" aria-labelledby="strumTitle" hidden>
+            <div class="panel-head">
+              <h2 id="strumTitle" data-i18n="strum.title">Strum check</h2>
+              <button class="icon-btn" type="button" id="strumClose" aria-label="Close" data-i18n-aria="strum.close">×</button>
+            </div>
+            <p class="strum-status" id="strumStatus" aria-live="polite"></p>
+            <ol class="strum-rows" id="strumRows"></ol>
+            <p class="note" id="strumHint" hidden data-i18n="strum.hint"></p>
+            <div class="row"><button class="btn" type="button" id="strumAgain" data-i18n="strum.again" hidden>Strum again</button></div>
+          </section>
           <p class="sweet-line" id="sweetLine"></p>
         </div>
       </section>
@@ -111,9 +122,24 @@
           <div class="offsets" id="offsetChart" aria-label="Offsets per string"></div>
           <p class="note" id="sweetNote"></p>
           <div class="sweet-list" id="sweetList" role="radiogroup" aria-label="Sweetener" data-i18n-aria="sweeten.listAria"></div>
+          <div class="fit-block" id="fitBlock" hidden>
+            <div class="field">
+              <label for="fitSelect" data-i18n="fit.select">Guitar</label>
+              <div class="row">
+                <select id="fitSelect"></select>
+                <button class="btn" type="button" id="fitMeasure" data-i18n="fit.measure">Measure a guitar</button>
+                <button class="btn btn-quiet" type="button" id="fitDelete" data-i18n="fit.delete">Delete</button>
+              </div>
+            </div>
+            <p class="note" id="fitEmpty" data-i18n="fit.none"></p>
+            <p class="note" id="fitMeta"></p>
+            <div id="fitTable"></div>
+            <p class="note" id="fitSaddleNote"></p>
+          </div>
           <div class="field" id="sweetnessField">
-            <label for="sweetness"><span data-i18n="sweeten.sweetness">Sweetness</span> <output id="sweetnessOut">50 %</output></label>
+            <label for="sweetness"><span id="sweetnessLabel" data-i18n="sweeten.sweetness">Sweetness</span> <output id="sweetnessOut">50 %</output></label>
             <input type="range" id="sweetness" min="0" max="100" step="5" value="50">
+            <div class="range-ends" id="goalEnds" hidden><span data-i18n="fit.goal.et">Match other instruments</span><span data-i18n="fit.goal.sweet">Sweetest chords</span></div>
           </div>
           <div class="field" id="anchorField">
             <span class="field-label" data-i18n="anchor.label">Keep in place</span>
@@ -224,6 +250,18 @@
       </section>
     </main>
   </div>
+  <dialog class="wizard" id="wizard" aria-labelledby="wizTitle">
+    <div class="wiz-inner">
+      <header class="wiz-head">
+        <div>
+          <h2 id="wizTitle" data-i18n="wiz.title">Measure this guitar</h2>
+          <p class="wiz-step" id="wizStep"></p>
+        </div>
+      </header>
+      <div class="wiz-body" id="wizBody"></div>
+      <footer class="wiz-foot" id="wizFoot"></footer>
+    </div>
+  </dialog>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

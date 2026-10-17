@@ -78,7 +78,7 @@ for (const [code, L] of Object.entries(LOCALES)) {
     for (const mode of MODES) {
       useLocale(L, mode);
       const rendered = [
-        ...Object.keys(L.ui).map((k) => t(k, { n: 2, string: stringName(1), note: 'A2', name: 'X', list: '0', tuning: 'X', notes: 'E A D G B E', offsets: '0', key: 'C', row: 'X', hz: '440', ord: '5th' })),
+        ...Object.keys(L.ui).map((k) => t(k, { n: 2, string: stringName(1), note: 'A2', name: 'X', list: '0', tuning: 'X', notes: 'E A D G B E', offsets: '0', key: 'C', row: 'X', hz: '440', ord: '5th', k: 7, ok: 5, read: 6, tol: 1, value: '+0.5', date: '1/1', mm: '0.4', i: 1 })),
         ...TUNINGS.map((x) => tuningName(x).text + tuningAbout(x)),
         ...SWEETENERS.map((x) => sweetenerAbout(x)),
         ...TEMPERAMENTS.map((x) => temperamentAbout(x)),

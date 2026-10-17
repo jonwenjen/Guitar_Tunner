@@ -12,6 +12,8 @@ export const DEFAULTS = {
   sweetness: 0.5,
   anchor: 'average',          // 'average' | 'root'
   custom: { open: [0, 0, 0, 0, 0, 0], fret12: [0, 0, 0, 0, 0, 0] },
+  guitars: [],                // measured guitar profiles (guitar-fit.js makeProfile)
+  guitarId: null,             // active profile for the "This guitar" sweetener
   temperamentId: 'equal',
   temperamentRoot: 0,
   a4: 440,

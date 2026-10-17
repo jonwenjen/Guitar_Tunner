@@ -63,6 +63,60 @@ export const REFERENCES = {
   decheveigne2002: {
     cite: 'de Cheveigné, A. & Kawahara, H. (2002). YIN, a fundamental frequency estimator for speech and music. Journal of the Acoustical Society of America 111(4), 1917–1930.',
   },
+  giordano2015: {
+    cite: 'Giordano, N. (2015). Explaining the Railsback stretch in terms of the inharmonicity of piano tones and sensory dissonance. Journal of the Acoustical Society of America 138(4), 2359–2366.',
+    url: 'https://doi.org/10.1121/1.4931439',
+  },
+  hinrichsen2012: {
+    cite: 'Hinrichsen, H. (2012). Entropy-based tuning of musical instruments. Revista Brasileira de Ensino de Física 34(2), 2301.',
+    url: 'https://arxiv.org/abs/1203.5101',
+  },
+  jaatinen2022: {
+    cite: 'Jaatinen, J. & Pätynen, J. (2022). Effect of inharmonicity on pitch perception and subjective tuning of piano tones. Journal of the Acoustical Society of America 152(2), 1146–1157.',
+    url: 'https://doi.org/10.1121/10.0013572',
+  },
+  stange2018: {
+    cite: 'Stange, K., Wick, C. & Hinrichsen, H. (2018). Playing music in just intonation: A dynamically adaptive tuning scheme. Computer Music Journal 42(3), 47–62.',
+    url: 'https://arxiv.org/abs/1706.04338',
+  },
+  sethares1994: {
+    cite: 'Sethares, W. A. (1994). Adaptive tunings for musical scales. Journal of the Acoustical Society of America 96(1), 10–18.',
+    url: 'https://sethares.engr.wisc.edu/papers/adaptun.html',
+  },
+  plomp1965: {
+    cite: 'Plomp, R. & Levelt, W. J. M. (1965). Tonal consonance and critical bandwidth. Journal of the Acoustical Society of America 38, 548–560.',
+    url: 'https://doi.org/10.1121/1.1909741',
+  },
+  barbancho2012: {
+    cite: 'Barbancho, I., Tardón, L. J., Sammartino, S. & Barbancho, A. M. (2012). Inharmonicity-based method for the automatic generation of guitar tablature. IEEE Transactions on Audio, Speech, and Language Processing 20(6), 1857–1868.',
+    url: 'https://doi.org/10.1109/TASL.2012.2191281',
+  },
+  hodgkinson2010: {
+    cite: 'Hodgkinson, M., Timoney, J. & Lazzarini, V. (2010). A model of partial tracks for tension-modulated steel-string guitar tones. Proc. DAFx-10, Graz.',
+    url: 'https://www.dafx.de/paper-archive/2010/DAFx10/HodgkinsonTimoneyLazzarini_DAFx10_P69.pdf',
+  },
+  mottola2017: {
+    cite: 'Mottola, R. M. (2017). Blind listening evaluation of steel string acoustic guitar compensation strategies. OSF Preprints.',
+    url: 'https://osf.io/bqzf4',
+  },
+  mottola2018: {
+    cite: 'Mottola, R. M. (2018). Same-fretted-note intonation variability of the steel string acoustic guitar. OSF Preprints.',
+    url: 'https://osf.io/45mtc',
+  },
+  hallhess1984: {
+    cite: 'Hall, D. E. & Hess, J. T. (1984). Perception of musical interval tuning. Music Perception 2(2), 166–195.',
+  },
+  vos1986: {
+    cite: 'Vos, J. (1986). Purity ratings of tempered fifths and major thirds. Music Perception 3(3), 221–257.',
+  },
+  polytune: {
+    cite: 'Sound On Sound (2010). TC Electronic PolyTune review — polyphonic mode reads all six strings from one strum, ±1 cent, standard and drop tunings only.',
+    url: 'https://www.soundonsound.com/reviews/tc-electronic-polytune',
+  },
+  polyPatent: {
+    cite: 'U.S. Patent 9,076,416. Polyphonic tuner — selects partials so that harmonics shared by different strings do not confuse the reading.',
+    url: 'https://patents.google.com/patent/US9076416B2/en',
+  },
   petersonSC5000: {
     cite: 'Peterson Electro-Musical Products. Strobe Center 5000-II product page and SC-5000 instruction manual.',
     url: 'https://www.petersontuners.com/products/sc5000',

@@ -16,6 +16,7 @@
 // Offsets are arrays of six numbers, 6th string first (low → high), in cents.
 
 import { parseNote, pitchClass, JUST_DEVIATION } from './music.js';
+import { optimizeOffsets } from './guitar-fit.js';
 
 export const SWEETENERS = [
   { id: 'equal', name: 'Equal (no sweetening)', kind: 'fixed',
@@ -30,6 +31,9 @@ export const SWEETENERS = [
     open: [-2.3, 0, 0, -0.4, -2.1, -2.3],
     about: 'Offsets that guitarists measured from a Peterson StroboFlip’s guitar preset and posted publicly (6th→1st: −2.3, 0, 0, −0.4, −2.1, −2.3). Unofficial; designed for standard tuning.',
     sources: ['umgf', 'petersonFeiten'] },
+  { id: 'guitar-fit', name: 'This guitar (measured)', kind: 'profile', usesSweetness: true,
+    about: 'Offsets fitted to one guitar from four strums — open strings and a barre at the 2nd, 7th and 12th frets. Each open string is set so that, over common chords, notes land closest to equal temperament (goal at the left) or shared overtones beat least (goal at the right), using that guitar’s own fretting error and string stiffness.',
+    sources: ['varieschi2010', 'giordano2015', 'hinrichsen2012'] },
   { id: 'custom', name: 'Custom', kind: 'custom',
     about: 'Your own offsets for each open string, plus separate 12th-fret targets for setting intonation — the structure used by the Buzz Feiten system.',
     sources: ['feiten1997', 'petersonFeiten'] },
@@ -46,7 +50,7 @@ const round2 = (v) => Math.round(v * 100) / 100;
  * Compute offsets for a tuning.
  * @returns {{open:number[], fret12:number[], applies:boolean, note?:string}}
  */
-export function sweetenerOffsets(sweetener, tuning, { sweetness = 0.5, anchor = 'average', custom } = {}) {
+export function sweetenerOffsets(sweetener, tuning, { sweetness = 0.5, anchor = 'average', custom, profile } = {}) {
   const sw = typeof sweetener === 'string' ? findSweetener(sweetener) : sweetener;
   const res = { open: ZERO(), fret12: ZERO(), applies: true };
   if (!sw || sw.id === 'equal') return res;
@@ -59,6 +63,11 @@ export function sweetenerOffsets(sweetener, tuning, { sweetness = 0.5, anchor = 
       res.noteKey = 'gtrByString';
     }
     return res;
+  }
+  if (sw.kind === 'profile') {
+    if (!profile) return { ...res, applies: false, noteKey: 'needProfile', note: 'Measure a guitar first.' };
+    const r = optimizeOffsets({ notes: tuning.notes, tuning, profile, goal: sweetness });
+    return { open: r.open, fret12: r.fret12, applies: true };
   }
   if (sw.kind === 'custom') {
     res.open = (custom?.open || ZERO()).map(Number);

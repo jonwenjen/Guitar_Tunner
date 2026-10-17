@@ -1,5 +1,5 @@
 // Offline cache for the web version. Bump VERSION when files change.
-const VERSION = 'strobe-tuner-v2';
+const VERSION = 'strobe-tuner-v3';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'fonts/saira-var.woff', 'fonts/music-symbols.woff',
   'locales/en.js', 'locales/zh-TW.js', 'locales/ja.js', 'locales/ko.js', 'locales/es.js', 'locales/de.js', 'js/i18n.js',
@@ -7,6 +7,7 @@ const FILES = [
   'js/app.js', 'js/audio.js', 'js/capture-worklet.js', 'js/fft.js', 'js/headstock.js', 'js/learn.js',
   'js/music.js', 'js/pitch.js', 'js/references.js', 'js/store.js', 'js/strobe-engine.js', 'js/strobe-view.js',
   'js/sweeteners.js', 'js/temperaments.js', 'js/tone.js', 'js/tuner-core.js', 'js/tunings.js',
+  'js/poly.js', 'js/strum-capture.js', 'js/guitar-fit.js', 'js/fit-ui.js',
 ];
 
 self.addEventListener('install', (e) => {
