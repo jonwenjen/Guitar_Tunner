@@ -695,17 +695,32 @@ function syncBoardMode() {
   renderBoard();
 }
 
-async function startStrumCheck() {
+/** Step 6 of fitting a guitar: strum against the new targets, then get guided string by string. */
+function tuneToGuitar() {
+  showView('tune');
+  startStrumCheck({ fit: true });
+}
+
+let strumFit = false; // the panel is tuning to a measured guitar's targets
+
+function setStrumTitle() {
+  $('#strumTitle').textContent = strumFit ? t('board.titleFit') : t('strum.title');
+}
+
+async function startStrumCheck(opts = {}) {
+  const fit = !!(opts && opts.fit);
   if (!mic.running) {
     await startMic();
     if (!mic.running) return;
   }
   cancelStrumCheck(false);
   if (board) { stopGuide(); board = null; }
+  strumFit = fit;
+  setStrumTitle();
   strumBusy = true;
   $('#strumAgain').hidden = true;
   $('#strumAgain').classList.remove('is-on');
-  const prompt = t('strum.listen');
+  const prompt = fit ? t('board.fitListen') : t('strum.listen');
   renderStrumPanel(prompt);
   $('#instruction').className = 'instruction';
   $('#instruction').textContent = prompt;
@@ -743,6 +758,8 @@ async function startStrumCheck() {
   };
   renderBoard();
   ensurePanelVisible();
+  // Fitting a guitar: go straight into the string-by-string guide.
+  if (fit && board.rows.some((r) => needsWork(r, boardTol()))) startGuide();
 }
 
 function cancelStrumCheck(hide = true) {
@@ -752,6 +769,8 @@ function cancelStrumCheck(hide = true) {
   if (hide) {
     if (board) { board.guided = false; boardRelease(); }
     board = null;
+    strumFit = false;
+    setStrumTitle();
     $('#strumPanel').hidden = true;
   }
 }
@@ -780,13 +799,15 @@ function startWizard() {
     addBlockListener,
     goal: () => S.sweetness,
     existingNames: () => S.guitars.map((g) => g.name),
-    onSave: (profile) => {
+    onSave: (profile, goal) => {
       S.guitars.push(profile);
       S.guitarId = profile.id;
       S.sweetenerId = 'guitar-fit';
+      if (typeof goal === 'number') S.sweetness = goal;
       persist(); recompute(); renderHeader(); renderSweeten();
       $('#sweetNote').textContent = t('wiz.saved');
     },
+    onTune: tuneToGuitar,
   });
 }
 
@@ -801,6 +822,7 @@ function renderFitBlock() {
   sel.innerHTML = S.guitars.map((g) => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
   sel.hidden = !S.guitars.length;
   $('#fitDelete').hidden = !S.guitars.length;
+  $('#fitTune').hidden = !S.guitars.length;
   $('#fitEmpty').hidden = !!S.guitars.length;
   const prof = currentProfile();
   if (prof) sel.value = prof.id;
@@ -810,8 +832,11 @@ function renderFitBlock() {
 }
 
 function bindFit() {
-  $('#strumBtn').addEventListener('click', startStrumCheck);
-  $('#strumAgain').addEventListener('click', startStrumCheck);
+  $('#strumBtn').addEventListener('click', () => startStrumCheck());
+  $('#strumAgain').addEventListener('click', () => startStrumCheck({ fit: strumFit }));
+  $('#fitTune').addEventListener('click', tuneToGuitar);
+  $('#sweetNoteAction').addEventListener('click', startWizard);
+  $('#sweetLine').addEventListener('click', (e) => { if (e.target.closest('#sweetLineAction')) startWizard(); });
   $('#strumClose').addEventListener('click', () => cancelStrumCheck(true));
   $('#strumRows').addEventListener('click', onBoardTap);
   $('#strumGuide').addEventListener('click', startGuide);
@@ -864,7 +889,8 @@ function renderHeader() {
 
   const parts = [];
   const swName = sweetenerName(sw).text;
-  if (sw.id !== 'equal') {
+  const needProfile = sweet.noteKey === 'needProfile';
+  if (sw.id !== 'equal' && !needProfile) {
     parts.push(sweet.applies
       ? t('sweetLine.applies', { name: swName, offsets: sweet.open.map(fmtOffset).join(', ') })
       : t('sweetLine.na', { name: swName }));
@@ -872,7 +898,12 @@ function renderHeader() {
   if (S.temperamentId !== 'equal') {
     parts.push(t('sweetLine.temperament', { name: temperamentName(currentTemperament()).text, key: noteName(S.temperamentRoot + 60, S.flats) }));
   }
-  $('#sweetLine').textContent = parts.join(' / ');
+  // "This guitar" with nothing measured yet: say so, and make the line start the measurement.
+  const action = needProfile
+    ? `<button type="button" class="link-btn" id="sweetLineAction">${esc(t('sweetLine.needProfile', { name: swName }))}</button>`
+    : '';
+  $('#sweetLine').innerHTML = [action, ...parts.map(esc)].filter(Boolean).join(' / ');
+  setStrumTitle();
 }
 
 const fmtOffset = (v) => (Math.abs(v) < 0.05 ? fmt(0, 0) : fmtSigned(v, 1));
@@ -983,6 +1014,7 @@ function renderSweeten() {
   }).join('');
   chart.setAttribute('aria-label', t('sweeten.chartAria', { list: sweet.open.map(fmtOffset).join(', ') }));
   $('#sweetNote').textContent = sweet.noteKey ? t(`sweetNote.${sweet.noteKey}`) : (S.sweetenerId === 'equal' ? t('sweeten.chartNote') : '');
+  $('#sweetNoteAction').hidden = sweet.noteKey !== 'needProfile';
 
   const list = $('#sweetList');
   list.innerHTML = SWEETENERS.map((s) => {

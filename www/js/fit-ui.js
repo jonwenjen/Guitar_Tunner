@@ -169,7 +169,7 @@ export function updateTuneRow(el, i, row, o) {
  *   t, fmt, fmtSigned, stringName, stringShort, stringNote(i, fret), tuning(), tuningLabel(),
  *   openTargets() → first-partial freq per string (no capo, no sweetener),
  *   ensureMic() → Promise<boolean>, sampleRate(), addBlockListener(fn),
- *   goal(), existingNames(), onSave(profile), onClose()
+ *   goal(), existingNames(), onSave(profile, goal), onTune(), onClose()
  */
 export function openWizard(ctx) {
   const dlg = document.getElementById('wizard');
@@ -206,10 +206,20 @@ export function openWizard(ctx) {
     return `<button type="button" class="${cls}" id="${id}">${esc(label)}</button>`;
   }
 
+  // Six steps in all: four strums, results and settings, then tuning (on the Tune tab).
+  const stepLabels = () => [
+    t('wiz.openTitle'), ...MEASURE_FRETS.map((k) => t('fit.col.fret', { k })), t('wiz.steps.results'), t('wiz.steps.tune'),
+  ];
+  function renderStepper() {
+    if (state.i === 0) { stepEl.innerHTML = ''; return; }
+    const names = stepLabels();
+    const dots = names.map((_, k) => `<span class="${k + 1 < state.i ? 'is-done' : k + 1 === state.i ? 'is-cur' : ''}"></span>`).join('');
+    stepEl.innerHTML = `<span class="wiz-dots" aria-hidden="true">${dots}</span><span>${esc(t('wiz.step', { i: state.i, n: names.length, label: names[state.i - 1] }))}</span>`;
+  }
+
   function render() {
     const step = steps[state.i];
-    const measureCount = steps.length - 2;
-    stepEl.textContent = step === 'intro' || step === 'results' ? '' : t('wiz.step', { i: state.i, n: measureCount });
+    renderStepper();
     stopSession();
     if (step === 'intro') renderIntro();
     else if (step === 'results') renderResults();
@@ -222,8 +232,10 @@ export function openWizard(ctx) {
       const [inch, d] = inches[mm] || [mm / 25.4, 1];
       return `<option value="${mm}" ${mm === state.scale ? 'selected' : ''}>${mm} mm (${ctx.fmt(inch, d)}″)</option>`;
     }).join('');
+    const plan = ['wiz.plan.open', 'wiz.plan.frets', 'wiz.plan.results', 'wiz.plan.tune'];
     body.innerHTML = `
       <p>${esc(t('wiz.intro'))}</p>
+      <ol class="wiz-plan">${plan.map((k) => `<li>${esc(t(k))}</li>`).join('')}</ol>
       <div class="field">
         <label for="wizName">${esc(t('wiz.name'))}</label>
         <input type="text" id="wizName" maxlength="40" value="${esc(state.name)}" placeholder="${esc(t('wiz.namePlaceholder'))}">
@@ -324,19 +336,45 @@ export function openWizard(ctx) {
     const profile = makeProfile({
       name: state.name, scaleMm: state.scale, notes: state.notes, open: state.open, frets: state.frets, targets: state.targets,
     });
-    const offsets = optimizeOffsets({ notes: state.notes, tuning: ctx.tuning(), profile, goal: ctx.goal() });
+    let goal = Math.max(0, Math.min(1, ctx.goal()));
+    const offsetsHtml = () => {
+      const offsets = optimizeOffsets({ notes: state.notes, tuning: ctx.tuning(), profile, goal });
+      return offsets.open.map((v, i) => `<li><span>${esc(ctx.stringShort(i))} · ${esc(ctx.stringNote(i, 0))}</span><b>${profile.strings[i] ? `${ctx.fmtSigned(v, 1)} ¢` : '—'}</b></li>`).join('');
+    };
     body.innerHTML = `
       <h3>${esc(t('wiz.resultsTitle'))}</h3>
       <p class="note">${esc(t('wiz.resultsLede'))}</p>
       ${fitTableHtml(profile, ctx)}
       <p class="note">${esc(t('fit.saddleNote', { mm: profile.scaleMm }))}</p>
       <h3>${esc(t('wiz.offsets', { tuning: ctx.tuningLabel() }))}</h3>
-      <ol class="offset-list">${offsets.open.map((v, i) => `<li><span>${esc(ctx.stringShort(i))} · ${esc(ctx.stringNote(i, 0))}</span><b>${profile.strings[i] ? `${ctx.fmtSigned(v, 1)} ¢` : '—'}</b></li>`).join('')}</ol>`;
-    foot.innerHTML = button('wizCancel', t('wiz.cancel'), 'btn btn-quiet') + button('wizSave', t('wiz.save'), 'btn is-on');
+      <div class="field wiz-goal">
+        <label for="wizGoal">${esc(t('fit.goalLabel'))} <output id="wizGoalOut"></output></label>
+        <input type="range" id="wizGoal" min="0" max="100" step="5" value="${Math.round(goal * 100)}">
+        <div class="range-ends"><span>${esc(t('fit.goal.et'))}</span><span>${esc(t('fit.goal.sweet'))}</span></div>
+      </div>
+      <ol class="offset-list" id="wizOffsets">${offsetsHtml()}</ol>
+      <p class="note">${esc(t('wiz.nextTune'))}</p>`;
+    const out = body.querySelector('#wizGoalOut');
+    const list = body.querySelector('#wizOffsets');
+    const showGoal = () => { out.textContent = `${ctx.fmt(Math.round(goal * 100), 0)} %`; };
+    showGoal();
+    body.querySelector('#wizGoal').addEventListener('input', (e) => {
+      goal = Number(e.target.value) / 100;
+      showGoal();
+      list.innerHTML = offsetsHtml();
+    });
+    foot.innerHTML = button('wizCancel', t('wiz.cancel'), 'btn btn-quiet')
+      + button('wizSave', t('wiz.save'))
+      + button('wizSaveTune', t('wiz.saveTune'), 'btn is-on');
     foot.querySelector('#wizCancel').addEventListener('click', close);
     foot.querySelector('#wizSave').addEventListener('click', () => {
-      ctx.onSave(profile);
+      ctx.onSave(profile, goal);
       close();
+    });
+    foot.querySelector('#wizSaveTune').addEventListener('click', () => {
+      ctx.onSave(profile, goal);
+      close();
+      ctx.onTune?.();
     });
   }
 

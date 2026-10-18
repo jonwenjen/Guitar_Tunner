@@ -533,3 +533,20 @@ html[data-theme='daylight'] .fit-table td.is-warn { color: #b0470c; }
   .srow-btn { grid-template-columns: 4.8em 1fr 5.8em; column-gap: 8px; }
 }
 .btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Inline action inside the line under the tuner ("This guitar: not measured yet"). */
+.link-btn {
+  appearance: none; border: 0; background: none; padding: 2px 0; font: inherit; color: var(--brass);
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.link-btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; border-radius: 4px; }
+#sweetNoteAction { justify-self: start; margin: 2px 0 6px; }
+/* Wizard progress: six dots, then "Step i of 6: label". */
+.wiz-step { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wiz-dots { display: inline-flex; gap: 5px; }
+.wiz-dots span { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.wiz-dots span.is-done { background: var(--patina); }
+.wiz-dots span.is-cur { background: var(--brass); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brass) 25%, transparent); }
+.wiz-plan { margin: 0 0 4px; padding-left: 1.4em; display: grid; gap: 4px; color: var(--ink-dim); font-size: 0.92rem; line-height: 1.45; }
+.wiz-plan li::marker { color: var(--brass); font-weight: 600; }
+.wiz-goal { margin-top: 2px; }
