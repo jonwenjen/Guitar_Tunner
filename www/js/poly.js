@@ -356,3 +356,60 @@ export function partialProfile(str, count = 8) {
   }
   return out.map((_, k) => 1 / (k + 1));
 }
+
+const median = (v) => {
+  const a = v.slice().sort((x, y) => x - y);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+};
+
+/**
+ * Combine several strums of the same chord into one reading per string: the median
+ * pitch (robust to one bad strum — a buzzing string, a weak barre, a late finger),
+ * the median stiffness, and the spread (median absolute deviation, cents).
+ * The result has the same shape as analyzeStrum, plus count / of / spread / readings.
+ * @param {Array<object>} results  analyzeStrum results
+ */
+export function combineStrums(results) {
+  const valid = results.filter((r) => r && r.ok);
+  if (!valid.length) return { ok: false, reason: 'none', strings: [], count: 0 };
+  const n = valid[0].strings.length;
+  const strings = [];
+  for (let i = 0; i < n; i++) {
+    const all = valid.map((r) => r.strings[i]).filter(Boolean);
+    let use = all.filter((s) => s.state === 'ok');
+    if (!use.length) use = all.filter((s) => s.state === 'unsure');
+    if (!use.length) {
+      // Never read: report the most frequent reason (shared overtones or not heard).
+      const shared = all.filter((s) => s.state === 'shared').length;
+      const state = shared * 2 >= all.length ? 'shared' : 'silent';
+      strings.push({ index: i, state, heard: false, confident: false, count: 0, of: valid.length, spread: null, readings: [] });
+      continue;
+    }
+    const readings = use.map((s) => s.cents);
+    const med = median(readings);
+    const spread = median(readings.map((c) => Math.abs(c - med)));
+    // The strum closest to the median supplies the partial amplitudes.
+    const rep = use.reduce((a, b) => (Math.abs(b.cents - med) < Math.abs(a.cents - med) ? b : a));
+    const k = Math.pow(2, (med - rep.cents) / 1200);
+    const fitted = use.filter((s) => s.Bfitted).map((s) => s.B);
+    const okCount = use[0].state === 'ok' ? use.length : 0;
+    const state = okCount * 2 >= valid.length ? 'ok' : 'unsure';
+    strings.push({
+      ...rep,
+      freq: rep.freq * k,
+      f0: rep.f0 * k,
+      cents: med,
+      B: fitted.length ? median(fitted) : rep.B,
+      Bfitted: fitted.length > 0,
+      state,
+      heard: true,
+      confident: state === 'ok',
+      count: use.length,
+      of: valid.length,
+      spread,
+      readings,
+    });
+  }
+  return { ok: true, strings, count: valid.length };
+}

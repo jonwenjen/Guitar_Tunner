@@ -32,7 +32,7 @@ export const SWEETENERS = [
     about: 'Offsets that guitarists measured from a Peterson StroboFlip’s guitar preset and posted publicly (6th→1st: −2.3, 0, 0, −0.4, −2.1, −2.3). Unofficial; designed for standard tuning.',
     sources: ['umgf', 'petersonFeiten'] },
   { id: 'guitar-fit', name: 'This guitar (measured)', kind: 'profile', usesSweetness: true,
-    about: 'Offsets fitted to one guitar from four strums — open strings and a barre at the 2nd, 7th and 12th frets. Each open string is set so that, over common chords, notes land closest to equal temperament (goal at the left) or shared overtones beat least (goal at the right), using that guitar’s own fretting error and string stiffness.',
+    about: 'Offsets fitted to one guitar from repeated strums of the open strings and a barre at the 2nd, 7th and 12th frets (median of each string). Each open string is set so that, over common chords, notes land closest to equal temperament (goal at the left) or shared overtones beat least (goal at the right), using that guitar’s own fretting error and string stiffness.',
     sources: ['varieschi2010', 'giordano2015', 'hinrichsen2012'] },
   { id: 'custom', name: 'Custom', kind: 'custom',
     about: 'Your own offsets for each open string, plus separate 12th-fret targets for setting intonation — the structure used by the Buzz Feiten system.',

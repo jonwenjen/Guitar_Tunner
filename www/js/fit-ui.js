@@ -2,7 +2,7 @@
 // Kept apart from app.js; everything app-specific arrives through `ctx`.
 
 import { StrumCapture } from './strum-capture.js';
-import { analyzeStrum, DEFAULT_B } from './poly.js';
+import { analyzeStrum, combineStrums, DEFAULT_B } from './poly.js';
 import { MEASURE_FRETS, SCALE_PRESETS, makeProfile, openReference, optimizeOffsets, fretError } from './guitar-fit.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -54,6 +54,7 @@ export function renderStrumRows(el, strings, o) {
     let cls = 'srow';
     let val = '—';
     let pos = null;
+    let spread = '';
     if (s) {
       if (s.state === 'ok' || s.state === 'unsure') {
         const c = s.cents;
@@ -62,6 +63,10 @@ export function renderStrumRows(el, strings, o) {
         if (s.state === 'unsure') cls += ' is-unsure';
         val = `${s.state === 'unsure' ? '≈ ' : ''}${o.fmtSigned(c, 1)} ¢`;
         pos = 50 + (Math.max(-range, Math.min(range, c)) / range) * 50;
+        if (s.count > 1 && s.spread !== null && s.spread !== undefined) {
+          spread = `±${o.fmt(s.spread, 1)}`;
+          if (s.spread > SPREAD_WARN) cls += ' is-spread';
+        }
       } else if (s.state === 'shared') {
         cls += ' is-na';
         val = o.t('strum.state.shared');
@@ -75,10 +80,13 @@ export function renderStrumRows(el, strings, o) {
     return `<li class="${cls}" aria-label="${esc(aria)}">
       <span class="srow-name">${esc(label)}</span>
       <span class="srow-gauge" aria-hidden="true">${tol ? `<b style="left:${50 - tol}%;width:${2 * tol}%"></b>` : ''}<s></s>${pos === null ? '' : `<i style="left:${pos}%"></i>`}</span>
-      <span class="srow-val">${esc(val)}</span>
+      <span class="srow-val">${esc(val)}${spread ? `<small class="srow-spread">${esc(spread)}</small>` : ''}</span>
     </li>`;
   }).join('');
 }
+
+/** Spread (median absolute deviation, cents) above which a string's strums disagree. */
+export const SPREAD_WARN = 1.5;
 
 // ── Tune board (strum check you can tune from) ──────────────────────────
 
@@ -186,6 +194,8 @@ export function openWizard(ctx) {
     notes: ctx.tuning().notes.slice(),
     open: null,
     frets: {},
+    runs: {},      // per step: every analysed strum, combined by median
+    takes: 5,      // strums per step
     session: null,
   };
   let n = 1;
@@ -206,7 +216,7 @@ export function openWizard(ctx) {
     return `<button type="button" class="${cls}" id="${id}">${esc(label)}</button>`;
   }
 
-  // Six steps in all: four strums, results and settings, then tuning (on the Tune tab).
+  // Six steps in all: four strum steps, results and settings, then tuning (on the Tune tab).
   const stepLabels = () => [
     t('wiz.openTitle'), ...MEASURE_FRETS.map((k) => t('fit.col.fret', { k })), t('wiz.steps.results'), t('wiz.steps.tune'),
   ];
@@ -247,6 +257,11 @@ export function openWizard(ctx) {
           <input type="number" id="wizScaleMm" min="400" max="1000" step="1" value="${state.scale}" hidden aria-label="${esc(t('wiz.scale'))} (mm)">
         </div>
         <p class="note">${esc(t('wiz.scaleHint'))}</p>
+      </div>
+      <div class="field">
+        <label for="wizTakes">${esc(t('wiz.takesLabel'))}</label>
+        <select id="wizTakes">${[3, 5, 7].map((v) => `<option value="${v}" ${v === state.takes ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <p class="note">${esc(t('wiz.takesHint'))}</p>
       </div>`;
     foot.innerHTML = button('wizCancel', t('wiz.cancel'), 'btn btn-quiet') + button('wizStart', t('wiz.start'), 'btn is-on');
     const sel = body.querySelector('#wizScale');
@@ -258,6 +273,7 @@ export function openWizard(ctx) {
     });
     mm.addEventListener('input', () => { state.scale = Math.max(400, Math.min(1000, Number(mm.value) || 648)); });
     body.querySelector('#wizName').addEventListener('input', (e) => { state.name = e.target.value.trim() || base; });
+    body.querySelector('#wizTakes').addEventListener('change', (e) => { state.takes = Number(e.target.value) || 5; });
     foot.querySelector('#wizCancel').addEventListener('click', close);
     foot.querySelector('#wizStart').addEventListener('click', async () => {
       if (!(await ctx.ensureMic())) return;
@@ -274,7 +290,10 @@ export function openWizard(ctx) {
   function renderMeasure(k) {
     const title = k === 0 ? t('wiz.openTitle') : t('wiz.fretTitle', { k });
     const how = k === 0 ? t('strum.listen') : t('strum.listenFret', { k });
-    const existing = k === 0 ? state.open : state.frets[k];
+    const total = state.takes;
+    const minTakes = Math.min(3, total);
+    if (!state.runs[k]) state.runs[k] = [];
+    const runs = state.runs[k];
     body.innerHTML = `
       <div class="wiz-measure">
         <div class="fret-badge" aria-hidden="true">${k === 0 ? '0' : k}</div>
@@ -283,53 +302,72 @@ export function openWizard(ctx) {
           <p>${esc(how)}</p>
         </div>
       </div>
+      <div class="wiz-takes" id="wizTakeDots" aria-hidden="true"></div>
       <p class="strum-status" id="wizStatus" aria-live="polite"></p>
       <ol class="strum-rows" id="wizRows"></ol>
       <p class="note" id="wizNote"></p>`;
     foot.innerHTML = button('wizCancel', t('wiz.cancel'), 'btn btn-quiet')
       + (k === 0 ? '' : button('wizSkip', t('wiz.skip'), 'btn btn-quiet'))
-      + button('wizRetry', t('wiz.retry'))
-      + button('wizNext', t('wiz.next'), 'btn is-on');
+      + button('wizRedo', t('wiz.redo'))
+      + button('wizNext', t('wiz.next'), 'btn');
     const rows = body.querySelector('#wizRows');
     const status = body.querySelector('#wizStatus');
     const note = body.querySelector('#wizNote');
+    const dots = body.querySelector('#wizTakeDots');
     const next = foot.querySelector('#wizNext');
     const rowOpts = {
       labels: k === 0 ? labels() : fretLabels(k), mode: k === 0 ? 'tune' : 'fret', tolerance: 3,
-      t, fmtSigned: ctx.fmtSigned, stringName: ctx.stringName,
+      t, fmt: ctx.fmt, fmtSigned: ctx.fmtSigned, stringName: ctx.stringName,
     };
-    const show = (res) => {
+    const combined = () => (runs.length ? combineStrums(runs) : null);
+    const show = (extra = '') => {
+      const res = combined();
+      if (k === 0) state.open = res; else if (res) state.frets[k] = res; else delete state.frets[k];
       renderStrumRows(rows, res ? res.strings : null, rowOpts);
-      next.disabled = !res;
+      dots.innerHTML = Array.from({ length: total }, (_, j) => `<span class="${j < runs.length ? 'is-done' : j === runs.length ? 'is-cur' : ''}"></span>`).join('');
+      next.disabled = runs.length < minTakes;
+      next.classList.toggle('is-on', runs.length >= total);
+      const notes = [];
       if (res) {
-        const read = res.strings.filter((s) => s.heard).length;
-        status.textContent = t('wiz.heard', { n: read });
-        note.textContent = read < 6 ? t('wiz.missing') : '';
+        const read = res.strings.filter((x) => x.heard).length;
+        if (read < 6) notes.push(t('wiz.missing'));
+        if (res.strings.some((x) => x.heard && x.count > 1 && x.spread > SPREAD_WARN)) notes.push(t('wiz.spreadWarn', { c: ctx.fmt(SPREAD_WARN, 1) }));
       }
+      if (extra) notes.unshift(extra);
+      note.textContent = notes.join(' ');
     };
-    show(existing);
     const listen = () => {
       stopSession();
-      status.textContent = how;
+      if (runs.length >= total) {
+        status.textContent = t('wiz.takesDone', { n: runs.length });
+        return;
+      }
+      status.textContent = `${t('wiz.takeOf', { i: runs.length + 1, n: total })} · ${t(runs.length ? 'wiz.strumNext' : 'wiz.strumFirst')}`;
       const expected = k === 0 ? state.targets.map((f, i) => ({ freq: f, B: DEFAULT_B[i] })) : expectedFor(k);
-      const session = captureStrum(ctx, (st) => { if (st === 'recording') status.textContent = t('strum.recording'); });
+      const session = captureStrum(ctx, (st) => {
+        if (st === 'recording') status.textContent = `${t('wiz.takeOf', { i: runs.length + 1, n: total })} · ${t('strum.recording')}`;
+      });
       state.session = session;
       session.promise.then(async (clip) => {
         if (state.session !== session) return;
         state.session = null;
-        if (!clip) { status.textContent = t('strum.timeout'); return; }
+        if (state.closed) return;
+        if (!clip) { show(t('strum.timeout')); listen(); return; }
         status.textContent = t('strum.analyzing');
         const res = await analyzeLater(clip, ctx.sampleRate(), expected);
-        if (!res.ok) { status.textContent = t('strum.timeout'); return; }
-        if (k === 0) state.open = res; else state.frets[k] = res;
-        show(res);
+        if (state.closed || state.session !== null || steps[state.i] !== (k === 0 ? 'open' : `fret${k}`)) return;
+        if (!res.ok) { show(t('strum.timeout')); listen(); return; }
+        runs.push(res);
+        show();
+        listen(); // straight on to the next strum until the step has all of them
       });
     };
-    if (!existing) listen();
+    show();
+    listen();
     foot.querySelector('#wizCancel').addEventListener('click', close);
-    foot.querySelector('#wizRetry').addEventListener('click', listen);
-    foot.querySelector('#wizSkip')?.addEventListener('click', () => { delete state.frets[k]; state.i++; render(); });
-    next.addEventListener('click', () => { state.i++; render(); });
+    foot.querySelector('#wizRedo').addEventListener('click', () => { runs.length = 0; show(); listen(); });
+    foot.querySelector('#wizSkip')?.addEventListener('click', () => { stopSession(); delete state.frets[k]; delete state.runs[k]; state.i++; render(); });
+    next.addEventListener('click', () => { stopSession(); state.i++; render(); });
   }
 
   function renderResults() {
@@ -379,11 +417,12 @@ export function openWizard(ctx) {
   }
 
   function close() {
+    state.closed = true;
     stopSession();
     if (dlg.open) dlg.close();
   }
 
-  dlg.addEventListener('close', () => { stopSession(); ctx.onClose?.(); }, { once: true });
+  dlg.addEventListener('close', () => { state.closed = true; stopSession(); ctx.onClose?.(); }, { once: true });
   render();
   if (!dlg.open) dlg.showModal();
 }

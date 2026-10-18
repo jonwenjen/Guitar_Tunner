@@ -17,7 +17,7 @@ What the app borrows from Peterson's strobe tuners, how the measurement works, h
 | Reference tone | Not listed (has a metronome) | No speaker | Tone generator at the exact target pitch |
 | Capo / transposition | Not listed | Keys of C, B♭, F, E♭ | Capo 0–9 |
 | All strings at once | — | — | Strum check: one strum reads all six strings (any tuning; strings whose overtones collide are flagged, not guessed) |
-| Per-guitar sweetening | Fixed presets | — | *This guitar (measured)*: four strums give the guitar's fretting error, saddle advice and open-string offsets fitted to it |
+| Per-guitar sweetening | Fixed presets | — | *This guitar (measured)*: four measuring steps (five strums each, median per string) give the guitar's fretting error, saddle advice and open-string offsets fitted to it |
 
 Sources: Peterson SC-5000-II product page and instruction manual; StroboPLUS HDC retailer specification (Andertons); Peterson's Buzz Feiten preset page. The app is independent and not affiliated with Peterson Electro-Musical Products.
 
@@ -104,7 +104,7 @@ The question behind the *Fit this guitar* feature: since every guitar's compensa
 
 ## 7. Fit this guitar — method and accuracy
 
-**Measuring.** The wizard records four strums: open strings, then a barre at frets 2, 7 and 12. Each strum is captured by an onset detector (energy jump ×8 above a −50 dB gate) and analysed from 0.55 s to 2.15 s after the onset:
+**Measuring.** The wizard has four measuring steps: open strings, then a barre at frets 2, 7 and 12. Each step is strummed five times by default (3 or 7 can be chosen) and every string keeps the **median** of its readings, with the median absolute deviation shown as ± — so one strum with a buzzing string, a weak barre or a late finger cannot skew the fit, and strings that vary by more than 1.5 ¢ are flagged. Each strum is captured by an onset detector (energy jump ×8 above a −50 dB gate) and analysed from 0.55 s to 2.15 s after the onset:
 
 1. Blackman window, zero-padded FFT.
 2. Every partial of every string is predicted from the target pitch and a default stiffness. Partials of different strings closer than the resolvable bandwidth (plus the uncertainty of the estimate) are excluded; in standard tuning this removes the high E and B fundamentals, which coincide with overtones of the low strings, so those strings are read from higher partials.

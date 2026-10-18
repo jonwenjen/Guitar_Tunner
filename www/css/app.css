@@ -550,3 +550,14 @@ html[data-theme='daylight'] .fit-table td.is-warn { color: #b0470c; }
 .wiz-plan { margin: 0 0 4px; padding-left: 1.4em; display: grid; gap: 4px; color: var(--ink-dim); font-size: 0.92rem; line-height: 1.45; }
 .wiz-plan li::marker { color: var(--brass); font-weight: 600; }
 .wiz-goal { margin-top: 2px; }
+
+/* Strums collected in a wizard step, and how much each string varied between them. */
+.wiz-takes { display: flex; gap: 6px; margin: 2px 0 -2px; }
+.wiz-takes span { width: 18px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 16%, transparent); }
+.wiz-takes span.is-done { background: var(--patina); }
+.wiz-takes span.is-cur { background: color-mix(in srgb, var(--brass) 70%, transparent); animation: take-pulse 1.2s ease-in-out infinite; }
+@keyframes take-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .wiz-takes span.is-cur { animation: none; } }
+.srow-spread { display: block; font-size: 0.72rem; color: var(--ink-faint); line-height: 1.1; }
+.srow.is-spread .srow-spread { color: var(--light); }
+html[data-theme='daylight'] .srow.is-spread .srow-spread { color: #b0470c; }

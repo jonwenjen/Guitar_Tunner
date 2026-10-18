@@ -108,3 +108,33 @@ test('capture gives up after the timeout', () => {
   for (let i = 0; i < 60; i++) state = cap.push(silence);
   assert.equal(state, 'timeout');
 });
+
+test('five strums: the median ignores one bad strum per string', async () => {
+  const { combineStrums } = await import('../www/js/poly.js');
+  const notes = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
+  const truth = [3.1, 2.4, 2.0, 4.2, 2.8, 1.9];
+  const runs = [];
+  for (let take = 0; take < 5; take++) {
+    // Take 2 has a badly fretted 3rd string (+6 ¢ sharp); take 4 misses the 1st string.
+    const det = truth.map((v, i) => v + (take === 2 && i === 3 ? 6 : 0));
+    const res = analyzeStrum(strum({ strings: guitar(notes, det, { fret: 7 }), seed: 1300 + take, ...REAL }), SR,
+      notes.map((n, i) => ({ freq: midiToFreq(parseNote(n)) * Math.pow(2, 7 / 12), B: SYNTH_B[i] * Math.pow(2, 14 / 12) })));
+    if (take === 4) res.strings[5] = { ...res.strings[5], state: 'silent', heard: false };
+    runs.push(res);
+  }
+  const c = combineStrums(runs);
+  assert.equal(c.count, 5);
+  c.strings.forEach((s, i) => {
+    assert.equal(s.state, 'ok', `string ${6 - i}`);
+    assert.ok(Math.abs(s.cents - truth[i]) < 0.4, `string ${6 - i}: median ${s.cents.toFixed(2)} vs ${truth[i]}`);
+    assert.ok(s.spread < 0.5, `string ${6 - i} spread ${s.spread.toFixed(2)}`);
+  });
+  assert.equal(c.strings[5].count, 4);
+  assert.equal(c.strings[3].readings.length, 5);
+  // A single strum's bad reading would have been 6 ¢ off; the median is not.
+  assert.ok(Math.max(...c.strings[3].readings) - truth[3] > 5);
+  // Frequencies follow the median, so the profile sees the median pitch.
+  const ref = midiToFreq(parseNote('G3')) * Math.pow(2, 7 / 12);
+  assert.ok(Math.abs(1200 * Math.log2(c.strings[3].freq / ref) - c.strings[3].cents) < 0.01);
+  assert.equal(combineStrums([]).ok, false);
+});
