@@ -70,5 +70,5 @@ jobs:
           gh release create "android-v${VERSION}" strobe-tuner.apk \
             --title "Strobe Tuner Android ${VERSION}" --notes-file notes.md --target "${{ github.sha }}" --latest
           # Keep the three newest Android releases.
-          gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("android-v"))] | .[3:] | .[].tagName' \
+          gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("android-v"))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
             | xargs -r -I{} gh release delete {} --cleanup-tag --yes
