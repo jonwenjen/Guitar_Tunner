@@ -130,6 +130,22 @@ summing the second term over partial pairs closer than 35 ¢, weighted by their 
 
 A real guitar adds finger-pressure variation (Mottola 2018), so strum each barre firmly and repeat if a value looks odd.
 
+## 8. Floating bridge, capo, nut and reference calibration
+
+**Floating bridge.** On a floating tremolo the strings balance the springs, so tightening one string tilts the bridge and lowers the others. The app models this as rank-one coupling through the bridge: a change of Δ<sub>j</sub> cents seen on string j moves string i by R<sub>ij</sub>Δ<sub>j</sub> with R<sub>ij</sub> = −q<sub>i</sub>/(1 − q<sub>j</sub>) and R<sub>jj</sub> = 1, where q<sub>i</sub> is string i's share of the bridge movement (similar string pulls assumed). Two strums measure it: one as the guitar is, one after raising the 6th string by about 30 ¢ while watching its row (the strum analysis searches ±60 ¢, so the test change is kept between +20 and +45 ¢). The other strings' movement ρ<sub>i</sub> = Δ<sub>i</sub>/Δ<sub>6</sub> gives q<sub>i</sub> = −ρ<sub>i</sub>(1 − q<sub>6</sub>), with q<sub>6</sub> taken as the mean share. For a pass in a fixed order, the changes Δ solve RΔ = −x (x = current deviations) and string j is left at the temporary target τ<sub>j</sub> = −Σ<sub>later l</sub> R<sub>jl</sub>Δ<sub>l</sub>; the guide sets the strobe's reference to that target, so the player simply zeroes it. While a string is turned, the same matrix carries its change to the other rows (shown as ≈ estimates until the confirming strum). Tests with a simulated bridge (shares 0.16–0.26) and ±0.4 ¢ strum noise: shares measured within 0.06, every string within 2 ¢ after one planned pass, against more than 5 ¢ left by plain string-by-string tuning; in the browser the temporary targets came out within 0.7 ¢ of the ideal plan.
+
+**Capo check.** With the capo set, one strum is read against the capo-transposed targets (stiffness raised by the shorter string, ∝ 1/L²). The mean deviation tells whether the capo pulls the strings sharp; advice is to seat it right behind the fret without excess pressure, or to retune with the capo on.
+
+**Nut advice.** The fretting-error model's nut term γ·v(k) is large at the first frets and vanishes at the 12th. Its contribution at fret 1 relative to fret 5, γ·(v(1) − v(5)), flags strings whose low frets play extra sharp (> 1.5 ¢) — a nut slot cut too high, or a guitar that would benefit from nut compensation. It is only reported when a low-fret (2nd-fret) measurement exists, and the model already shrinks γ with a ridge so a single noisy point does not trigger it.
+
+**Better uncertain readings.** The strum analysis now starts from the guitar's own stiffness — the measured profile, or the last strum that fitted it — scaled for tension (∝ 1/f²) and capo, and a check can take the median of three strums.
+
+**Reference calibration.** A sustained note from the reference instrument is locked to the nearest equal-tempered note at A4 = 440 Hz; once the strobe reading holds steady (median absolute deviation under 0.6 ¢ over about a second) A4 is set so that note becomes the target. A synthetic 442 Hz tone was calibrated to 442.0 Hz in about two seconds.
+
+**Strum detection between strums.** A new strum over a chord that is still ringing at a similar level is physically hard to tell apart by level (tested: missed at 3.2 s spacing on long-sustain strings, with plain or high-frequency-weighted energy alike). Muting the strings for ~0.4 s before strumming made detection reliable, so every prompt now asks for it.
+
+**Diagnostics.** Strum checks and measurements can be exported as 16-bit WAV files that carry the app's per-strum readings as JSON in a standard LIST/INFO comment chunk, so real-guitar recordings can be used to tune the analysis.
+
 ## References
 
 - Anderson, H., Lin, K. W. E., Agus, N. & Lui, S. (2015). Major thirds: A better way to tune your iPad. *Proc. NIME 2015*, 365–368. <https://nime.org/proc/nime2015_klin/>

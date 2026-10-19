@@ -12,8 +12,12 @@ import { SWEETENERS, findSweetener, sweetenerOffsets } from './sweeteners.js';
 import { TEMPERAMENTS } from './temperaments.js';
 import { REFERENCES } from './references.js';
 import { LEARN_REFS } from './learn.js';
-import { captureStrum, analyzeLater, openWizard, fitTableHtml, renderTuneBoard, updateTuneRow, needsWork } from './fit-ui.js';
-import { DEFAULT_B } from './poly.js';
+import { captureStrum, analyzeLater, openWizard, fitTableHtml, renderTuneBoard, updateTuneRow, needsWork, boardAdvice } from './fit-ui.js';
+import { DEFAULT_B, combineStrums } from './poly.js';
+import { encodeWav, joinClips } from './wav.js';
+import { shareFile, pickTextFile, stamp } from './share-file.js';
+import { TunedCue } from './feedback.js';
+import { estimateBridge, planBridge, responseMatrix } from './bridge.js';
 import { loadSettings, saveSettings, DEFAULTS } from './store.js';
 import { parseNote, octaveOf, cents as centsOf, freqToMidi, noteLabel as noteLabelIntl } from './music.js';
 import {
@@ -105,6 +109,11 @@ function targetFreq(i) {
   if (!x) return 0;
   return S.intonation ? x.freq12 : x.freq;
 }
+
+// Temporary per-string reference offsets (cents): the floating-bridge guide parks each
+// string a little off pitch so the strings tuned after it pull it into place.
+const refOffset = [0, 0, 0, 0, 0, 0];
+const refFreq = (i) => targetFreq(i) * Math.pow(2, (refOffset[i] || 0) / 1200);
 
 // ── Audio path ─────────────────────────────────────────────────────────
 function onBlock(block) {
@@ -216,10 +225,12 @@ function loop(now) {
       lastMpm = r;
       if (r.freq) {
         lastSound = now;
-        chooseReference(r.freq);
+        if (a4cal) a4calLock(r);
+        else chooseReference(r.freq);
       }
     }
     const er = engine.read();
+    if (a4cal) a4calRead(er, now);
     level = Math.max(0, Math.min(1, (20 * Math.log10(er.level + 1e-9) - S.gateDb) / 34));
     const sounding = now - lastSound < 250;
     if (engine.ref && (sounding || now - lastSound < 1200)) {
@@ -241,6 +252,7 @@ function loop(now) {
   if (reading && reading.sounding && S.mode !== 'chromatic' && activeString >= 0 && reading.cents !== null) {
     if (tunedTracker.update(activeString, reading.cents, dt, S.tolerance)) {
       announce(t('sr.tuned', { string: stringName(activeString) }));
+      cue.play({ vibrate: S.cueVibrate, sound: S.cueSound });
       boardTuned(activeString);
     }
   }
@@ -269,7 +281,7 @@ function chooseReference(freq) {
     const list = targets.map((_, i) => ({ freq: targetFreq(i) }));
     activeString = tracker.update(freq, list);
   }
-  if (activeString >= 0) engine.setReference(targetFreq(activeString));
+  if (activeString >= 0) engine.setReference(refFreq(activeString));
 }
 
 function stringMidi(i) {
@@ -467,15 +479,20 @@ function setCapo(n) {
 }
 
 // ── Strum check and tune board ─────────────────────────────────────────
-// One strum fills the board; then each string can be tuned on its own. A single
-// plucked string reads with McLeod clarity ≥ 0.98 while a ringing chord stays below
-// 0.6, so rows only take live readings that are clearly one string.
+// One strum (or the median of three) fills the board; then each string can be tuned
+// on its own. A single plucked string reads with McLeod clarity ≥ 0.98 while a
+// ringing chord stays below 0.6, so rows only take live readings that are clearly
+// one string.
 const LIVE_CLARITY = 0.93;
 const LIVE_SETTLE_MS = 250;
-let board = null;      // { rows, focus, live, guided, finished, queue, prev }
+let board = null;      // { rows, focus, live, guided, finished, queue, prev, tau, clips, results, message }
 let boardBusy = false; // true while the board itself changes the tuner mode
 let boardTick = 0;
 let guideTimer = 0;
+let strumMode = 'normal'; // 'normal' | 'fit' | 'capo' | 'bridge'
+let strumToken = 0;        // bumped on cancel so late analyses are dropped
+let bridgeCal = null;      // { before } while measuring the bridge coupling
+const cue = new TunedCue(() => mic.ctx || ownCtx);
 
 function strumLabels() {
   return targets.map((x, i) => `${stringShort(i)} · ${noteLabel(x.midi, useFlats())}`);
@@ -485,8 +502,21 @@ function boardOpts() {
   return {
     labels: strumLabels(), tolerance: boardTol(), liveTolerance: S.tolerance, t, fmtSigned, stringName,
     focus: board ? board.focus : -1, live: board ? board.live : -1,
+    // While measuring the bridge only the detuned string needs advice, and its goal is +20…+45 ¢.
+    advice: bridgeCal ? (i, row) => (i === 0 ? detuneAdvice(row) : '') : null,
   };
 }
+
+const DETUNE_LO = 20, DETUNE_HI = 45;
+function detuneAdvice(row) {
+  if (!hasValue(row)) return t('board.pluckFocus');
+  if (row.cents < DETUNE_LO) return t('board.advice', { dir: t('board.tighten'), size: t(row.cents < DETUNE_LO - 15 ? 'board.size.big' : 'board.size.small') });
+  if (row.cents > DETUNE_HI) return t('board.advice', { dir: t('board.loosen'), size: t('board.size.small') });
+  return t('bridge.detuneOk');
+}
+const showSharedHint = () => board.rows.some((r) => r && !r.predicted && (r.state === 'shared' || r.state === 'unsure'));
+const bridgeActive = () => !!(S.bridgeComp && S.bridge && Array.isArray(S.bridge.q) && S.bridge.q.length === 6);
+const hasValue = (r) => !!r && (r.state === 'ok' || r.state === 'unsure' || r.state === 'live') && Number.isFinite(r.cents);
 
 function ensurePanelVisible() {
   const panel = $('#strumPanel');
@@ -516,11 +546,15 @@ function renderStrumPanel(status) {
   $('#strumHint').hidden = true;
   $('#strumGuide').hidden = true;
   $('#strumStop').hidden = true;
+  $('#strumExport').hidden = true;
+  $('#boardFocusCard').hidden = true;
+  renderStrumOptions();
   if (opening) ensurePanelVisible();
 }
 
 function boardStatus() {
   const tol = boardTol();
+  if (bridgeCal) return t('bridge.detune', { string: stringName(0) });
   if (board.guided) {
     if (board.finished) return t('board.allDone');
     const i = board.focus;
@@ -532,27 +566,51 @@ function boardStatus() {
   return t('strum.summary', { ok, read: read.length, tol: fmt(tol, tol % 1 ? 1 : 0) });
 }
 
-function boardPlan() {
-  const tol = boardTol();
-  if (board.guided) return board.finished ? t('board.retune') : '';
-  const todo = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol, S.tolerance));
-  if (!todo.length) return t('board.allGood');
-  if (board.focus >= 0) return t('board.retune');
-  return `${t('board.order', { list: todo.map((i) => stringShort(i)).join(' → ') })}\n${t('board.retune')}`;
+function capoAdvice() {
+  const vals = board.strumCents.filter((v) => v !== null);
+  if (!vals.length) return '';
+  const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+  if (m > 2) return t('board.capoSharp', { c: fmt(m, 1) });
+  if (m < -2) return t('board.capoFlat', { c: fmt(-m, 1) });
+  return t('board.capoOk');
 }
 
-/** Full redraw of the board: rows, status, advice and buttons. */
+function boardPlan() {
+  const tol = boardTol();
+  const lines = [];
+  if (board.message) lines.push(board.message);
+  if (bridgeCal) { lines.push(t('bridge.detuneHow', { string: stringName(0) })); return lines.join('\n'); }
+  if (strumMode === 'capo' && !board.guided) lines.push(capoAdvice());
+  if (board.guided) {
+    if (board.finished) lines.push(t('board.retune'));
+    else if (board.tau) lines.push(t('bridge.guideNote'));
+    return lines.filter(Boolean).join('\n');
+  }
+  const todo = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol, S.tolerance));
+  if (!todo.length) lines.push(t('board.allGood'));
+  else if (board.focus >= 0) lines.push(t('board.retune'));
+  else {
+    lines.push(t('board.order', { list: todo.map((i) => stringShort(i)).join(' → ') }));
+    lines.push(bridgeActive() ? t('bridge.planNote') : t('board.retune'));
+  }
+  return lines.filter(Boolean).join('\n');
+}
+
+/** Full redraw of the board: rows, focus card, status, advice and buttons. */
 function renderBoard() {
   if (!board) return;
   const tol = boardTol();
   renderTuneBoard($('#strumRows'), board.rows, boardOpts());
   refreshBoardText();
+  renderFocusCard();
   const todo = board.rows.some((r) => needsWork(r, tol, S.tolerance));
-  $('#strumGuide').hidden = board.guided || !todo;
+  $('#strumGuide').hidden = board.guided || !!bridgeCal || !(todo || bridgeActive());
   $('#strumStop').hidden = !board.guided || board.finished;
-  $('#strumAgain').hidden = false;
-  $('#strumAgain').classList.toggle('is-on', !todo || board.finished);
-  $('#strumHint').hidden = !board.rows.some((r) => r && (r.state === 'shared' || r.state === 'unsure'));
+  $('#strumAgain').hidden = !!bridgeCal;
+  $('#strumAgain').classList.toggle('is-on', (!todo || board.finished) && !bridgeCal);
+  $('#strumExport').hidden = !(board.clips && board.clips.length);
+  $('#strumHint').hidden = !showSharedHint();
+  renderStrumOptions();
 }
 
 function refreshBoardText() {
@@ -565,10 +623,45 @@ function refreshBoardText() {
   if (planEl.textContent !== plan) planEl.textContent = plan;
 }
 
+/** Large live display of the string being tuned, readable at arm's length. */
+function renderFocusCard() {
+  const card = $('#boardFocusCard');
+  const i = board ? board.focus : -1;
+  card.hidden = i < 0;
+  if (i < 0) return;
+  const row = board.rows[i];
+  const tau = refOffset[i] || 0;
+  const live = board.live === i;
+  const value = hasValue(row) ? row.cents - tau : null;
+  const tol = row && row.state === 'live' ? S.tolerance : boardTol();
+  const set = (sel, text) => { const el = $(sel, card); if (el.textContent !== text) el.textContent = text; };
+  set('.bf-name', `${stringName(i)} · ${noteLabel(targets[i].midi, useFlats())}`);
+  set('.bf-cents', value === null ? '—' : `${fmtSigned(value, 1)} ¢`);
+  let advice = t('board.pluckFocus');
+  if (bridgeCal) advice = detuneAdvice(row);
+  else if (value !== null) advice = boardAdvice({ ...row, cents: value }, boardTol(), t, S.tolerance);
+  set('.bf-advice', advice);
+  let note = '';
+  if (bridgeCal) note = t('bridge.detuneTarget');
+  else if (tau) note = t('bridge.tempTarget', { c: fmtSigned(tau, 1) });
+  else if (!live && value !== null && row.state !== 'live') note = t('board.fromStrum');
+  set('.bf-note', note);
+  const dot = $('.bf-gauge i', card);
+  dot.hidden = value === null;
+  if (value !== null) dot.style.left = `${50 + (Math.max(-10, Math.min(10, value)) / 10) * 50}%`;
+  const w = (tol / 10) * 50;
+  $('.bf-gauge b', card).style.cssText = `left:${50 - w}%;width:${2 * w}%`;
+  const inTol = value !== null && (bridgeCal ? value >= DETUNE_LO && value <= DETUNE_HI : Math.abs(value) <= tol);
+  card.classList.toggle('is-ok', inTol);
+  card.classList.toggle('is-off', value !== null && !inTol);
+  card.classList.toggle('is-live', live);
+}
+
 /** Called every animation frame: feed a clean single-string reading into its row. */
 function boardLive(reading, now) {
   if (!board || strumBusy) return;
   let live = -1;
+  let moved = false;
   const clean = reading && reading.sounding && reading.cents !== null && activeString >= 0
     && S.mode !== 'chromatic' && !S.intonation && engine?.ref
     && lastMpm && lastMpm.freq && lastMpm.clarity >= LIVE_CLARITY
@@ -579,29 +672,57 @@ function boardLive(reading, now) {
   if (cand >= 0 && now - board.candAt >= LIVE_SETTLE_MS) {
     live = cand;
     const prev = board.rows[live];
-    board.rows[live] = { cents: reading.cents, state: 'live', done: prev ? !!prev.done : false };
+    // Rows always show the deviation from the final target, even while the reference
+    // sits on a temporary floating-bridge target.
+    board.rows[live] = { cents: reading.cents + (refOffset[live] || 0), state: 'live', done: prev ? !!prev.done : false };
+    if (board.guided && board.tau && live === board.focus) moved = propagateBridge(live);
   }
   const changedRow = live !== board.live;
   const was = board.live;
   board.live = live;
-  if (!changedRow && now - boardTick < 66) return; // ~15 updates a second is plenty
+  if (!changedRow && !moved && now - boardTick < 66) return; // ~15 updates a second is plenty
   boardTick = now;
   const o = boardOpts();
   const el = $('#strumRows');
-  if (was >= 0 && was !== live) updateTuneRow(el, was, board.rows[was], o);
-  if (live >= 0) updateTuneRow(el, live, board.rows[live], o);
+  if (moved) board.rows.forEach((r, i) => updateTuneRow(el, i, r, o));
+  else {
+    if (was >= 0 && was !== live) updateTuneRow(el, was, board.rows[was], o);
+    if (live >= 0) updateTuneRow(el, live, board.rows[live], o);
+  }
+  if (board.focus >= 0 && (live === board.focus || was === board.focus)) renderFocusCard();
   if (changedRow || live >= 0) {
     refreshBoardText();
     const todo = board.rows.some((r) => needsWork(r, boardTol(), S.tolerance));
-    $('#strumGuide').hidden = board.guided || !todo;
-    $('#strumAgain').classList.toggle('is-on', !todo || board.finished);
-    $('#strumHint').hidden = !board.rows.some((r) => r && (r.state === 'shared' || r.state === 'unsure'));
+    $('#strumGuide').hidden = board.guided || !!bridgeCal || !(todo || bridgeActive());
+    $('#strumAgain').classList.toggle('is-on', (!todo || board.finished) && !bridgeCal);
+    $('#strumHint').hidden = !showSharedHint();
   }
+}
+
+/**
+ * Floating bridge: as the focused string is turned, the bridge tilts and moves the
+ * others. Carry each change over to the other rows with the measured coupling, so
+ * they show where every string now sits (≈, until the confirming strum).
+ */
+function propagateBridge(j) {
+  const cur = board.rows[j].cents;
+  const prev = board.lastLive[j];
+  board.lastLive[j] = cur;
+  if (prev === undefined) return false; // first reading of this string in the pass: baseline only
+  const d = cur - prev;
+  if (Math.abs(d) < 0.05) return false;
+  board.rows.forEach((r, i) => {
+    if (i === j || !hasValue(r)) return;
+    r.cents += board.R[i][j] * d;
+    r.state = 'unsure';
+    r.predicted = true;
+  });
+  return true;
 }
 
 /** The tuned tracker confirmed a string (held in tolerance): advance the guide. */
 function boardTuned(i) {
-  if (!board || board.live !== i) return;
+  if (!board || board.live !== i || bridgeCal) return;
   board.rows[i].done = true;
   if (board.guided && board.focus === i) {
     clearTimeout(guideTimer);
@@ -618,7 +739,9 @@ function boardFocus(i) {
   activeString = i;
   setMode('manual');
   boardBusy = false;
-  if (engine) engine.setReference(targetFreq(i));
+  refOffset.fill(0);
+  if (board.guided && board.tau) refOffset[i] = board.tau[i] || 0;
+  if (engine) engine.setReference(refFreq(i));
   tunedTracker.tuned[i] = false;
   tunedTracker.timeIn[i] = 0;
   if (board.rows[i]) board.rows[i].done = false;
@@ -628,6 +751,7 @@ function boardFocus(i) {
 
 /** Give the tuner back the mode it had before the board took over. */
 function boardRelease() {
+  refOffset.fill(0);
   if (!board) return;
   clearTimeout(guideTimer);
   board.focus = -1;
@@ -642,9 +766,23 @@ function boardRelease() {
 }
 
 function startGuide() {
-  if (!board) return;
+  if (!board || bridgeCal) return;
   const tol = boardTol();
-  board.queue = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol, S.tolerance));
+  board.message = '';
+  if (bridgeActive()) {
+    // On a floating bridge every string moves when any string is tuned, so go through
+    // all six, low to high, each to the temporary target that lets the strings tuned
+    // after it pull it onto pitch.
+    board.queue = [0, 1, 2, 3, 4, 5];
+    const x = board.rows.map((r) => (hasValue(r) ? r.cents : 0));
+    board.tau = planBridge(x, S.bridge.q, board.queue).tau.map((v) => Math.max(-40, Math.min(40, v)));
+    board.R = responseMatrix(S.bridge.q);
+    board.lastLive = {};
+    board.rows.forEach((r) => { if (r) r.done = false; });
+  } else {
+    board.tau = null;
+    board.queue = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol, S.tolerance));
+  }
   if (!board.queue.length) return;
   board.guided = true;
   board.finished = false;
@@ -657,9 +795,11 @@ function guideNext() {
   const next = order.find((i) => !(board.rows[i] && board.rows[i].done));
   if (next === undefined) {
     board.finished = true;
+    board.tau = null;
     boardRelease();
     renderBoard();
     announce(t('board.allDone'));
+    cue.play({ vibrate: S.cueVibrate, sound: S.cueSound, done: true });
     return;
   }
   boardFocus(next);
@@ -669,13 +809,14 @@ function stopGuide() {
   if (!board) return;
   board.guided = false;
   board.finished = false;
+  board.tau = null;
   boardRelease();
   renderBoard();
 }
 
 function onBoardTap(e) {
   const li = e.target.closest('[data-i]');
-  if (!li || !board) return;
+  if (!li || !board || bridgeCal) return;
   const i = Number(li.dataset.i);
   if (board.guided) {
     if (board.finished) { board.guided = false; board.finished = false; }
@@ -693,30 +834,106 @@ function syncBoardMode() {
   // (headstock tap during the guide) keeps the mode to restore afterwards.
   if (S.mode !== 'manual') board.prev = null;
   board.focus = S.mode === 'manual' ? lockedString : -1;
-  if (board.guided && S.mode !== 'manual') { board.guided = false; board.finished = false; }
+  if (board.guided && S.mode !== 'manual') { board.guided = false; board.finished = false; board.tau = null; refOffset.fill(0); }
+  if (board.guided && board.tau && board.focus >= 0) {
+    refOffset.fill(0);
+    refOffset[board.focus] = board.tau[board.focus] || 0;
+  }
   renderBoard();
 }
 
 /** Step 6 of fitting a guitar: strum against the new targets, then get guided string by string. */
 function tuneToGuitar() {
   showView('tune');
-  startStrumCheck({ fit: true });
+  startStrumCheck({ mode: 'fit' });
 }
-
-let strumFit = false; // the panel is tuning to a measured guitar's targets
 
 function setStrumTitle() {
-  $('#strumTitle').textContent = strumFit ? t('board.titleFit') : t('strum.title');
+  const key = { fit: 'board.titleFit', capo: 'board.titleCapo', bridge: 'board.titleBridge' }[strumMode] || 'strum.title';
+  $('#strumTitle').textContent = t(key);
 }
 
-async function startStrumCheck(opts = {}) {
-  const fit = !!(opts && opts.fit);
-  if (!mic.running) {
-    await startMic();
-    if (!mic.running) return;
+/** Options under the board: strums per check, floating bridge. */
+function renderStrumOptions() {
+  $$('[data-takes]').forEach((b) => b.setAttribute('aria-checked', String(Number(b.dataset.takes) === (S.strumTakes === 3 ? 3 : 1))));
+  $('#bridgeToggle').checked = !!S.bridgeComp;
+  const busy = strumBusy || !!bridgeCal;
+  $('#bridgeMeasure').hidden = !S.bridgeComp || busy;
+  $('#bridgeMeasure').textContent = S.bridge ? t('bridge.remeasure') : t('bridge.measure');
+  $('#bridgeNext').hidden = !bridgeCal;
+  let info = t('bridge.off');
+  if (S.bridgeComp) {
+    info = S.bridge
+      ? t('bridge.info', { date: S.bridge.date, c: fmt(S.bridge.drop10 ?? 0, 1), string: stringName(0) })
+      : t('bridge.none');
   }
+  $('#bridgeInfo').textContent = info;
+}
+
+// Stiffness prior for the strum analysis: the measured guitar if there is one, else
+// the last strum that fitted it, else a typical set. Stiffness falls with tension
+// (∝ 1/f²) and rises as a capo shortens the string (∝ 1/L²).
+function stiffnessPrior(i) {
+  const nowMidi = parseNote(currentTuning().notes[i]);
+  const capo = Math.pow(2, (2 * S.capo) / 12);
+  const prof = currentProfile();
+  const p = prof?.strings?.[i];
+  if (p && p.B > 0) return p.B * Math.pow(2, (2 * ((p.midi ?? nowMidi) - nowMidi)) / 12) * capo;
+  const last = S.stringB?.[i];
+  if (last && last.B > 0) return last.B * Math.pow(2, (2 * (last.midi - nowMidi)) / 12) * capo;
+  return DEFAULT_B[i] * capo;
+}
+function rememberStiffness(res) {
+  const notes = currentTuning().notes;
+  const capo = Math.pow(2, (2 * S.capo) / 12);
+  const store = Array.isArray(S.stringB) ? S.stringB.slice(0, 6) : [];
+  let changed = false;
+  res.strings.forEach((x, i) => {
+    if (x.state !== 'ok' || !x.Bfitted || !(x.B > 1e-6 && x.B < 1e-3)) return;
+    store[i] = { midi: parseNote(notes[i]), B: Number((x.B / capo).toPrecision(4)) };
+    changed = true;
+  });
+  if (changed) { S.stringB = store; persist(); }
+}
+const strumExpected = () => targets.map((x, i) => ({ freq: x.freq, B: stiffnessPrior(i) }));
+
+/**
+ * Capture and analyse `takes` strums in a row (median later).
+ * @returns {Promise<{results:object[], clips:object[], timeout?:boolean}|null>} null if cancelled
+ */
+async function runStrumTakes({ takes, prompt, expected, next = false }) {
+  const token = strumToken;
+  const results = [], clips = [];
+  let misses = 0;
+  while (results.length < takes) {
+    const k = results.length;
+    const head = takes > 1 ? `${t('wiz.takeOf', { i: k + 1, n: takes })} · ` : '';
+    $('#strumStatus').textContent = head + (k === 0 && !next ? prompt : t('wiz.strumNext'));
+    const session = captureStrum({ sampleRate: () => mic.sampleRate, addBlockListener }, (st) => {
+      if (st === 'recording') $('#strumStatus').textContent = head + t('strum.recording');
+    });
+    strumSession = session;
+    const clip = await session.promise;
+    if (token !== strumToken) return null;
+    strumSession = null;
+    if (!clip) return { results, clips, timeout: true };
+    $('#strumStatus').textContent = head + t('strum.analyzing');
+    const res = await analyzeLater(clip, mic.sampleRate, expected);
+    if (token !== strumToken) return null;
+    if (!res.ok) {
+      if (++misses >= 3) return { results, clips, timeout: true };
+      continue;
+    }
+    results.push(res);
+    clips.push({ samples: Float32Array.from(clip.samples), onset: clip.onset });
+  }
+  return { results, clips };
+}
+
+function prepareStrum(mode) {
   cancelStrumCheck(false);
   if (board) { stopGuide(); board = null; }
+  bridgeCal = null;
   // The board compares open strings with their string targets, so it cannot run in
   // 12th-fret mode (targets an octave up) or chromatic mode (no string targets).
   if (S.intonation) {
@@ -727,34 +944,41 @@ async function startStrumCheck(opts = {}) {
     persist();
   }
   if (S.mode === 'chromatic') setMode('auto');
-  strumFit = fit;
+  strumMode = mode;
   setStrumTitle();
   strumBusy = true;
   $('#strumAgain').hidden = true;
   $('#strumAgain').classList.remove('is-on');
-  const prompt = fit ? t('board.fitListen') : t('strum.listen');
+}
+
+function makeBoard(res, out) {
+  const rows = res.strings.map((x) => ({ cents: hasValue(x) ? x.cents : null, state: x.state, done: false }));
+  return {
+    rows,
+    strumCents: rows.map((r) => (r.state === 'ok' ? r.cents : null)),
+    focus: -1, live: -1, cand: -1, candAt: 0, guided: false, finished: false, queue: [], prev: null, tau: null,
+    clips: out.clips, results: out.results, combined: out.results.length > 1 ? res : null, message: '',
+  };
+}
+
+async function startStrumCheck(opts = {}) {
+  const mode = (opts && opts.mode) || 'normal';
+  if (!mic.running) {
+    await startMic();
+    if (!mic.running) return;
+  }
+  prepareStrum(mode);
+  const prompt = { fit: t('board.fitListen'), capo: t('board.capoListen') }[mode] || t('strum.listen');
   renderStrumPanel(prompt);
   $('#instruction').className = 'instruction';
   $('#instruction').textContent = prompt;
-  const expected = targets.map((x, i) => ({ freq: x.freq, B: DEFAULT_B[i] }));
-  const session = captureStrum({ sampleRate: () => mic.sampleRate, addBlockListener }, (st) => {
-    if (st === 'recording') $('#strumStatus').textContent = t('strum.recording');
-  });
-  strumSession = session;
-  const clip = await session.promise;
-  if (strumSession !== session) return;
-  strumSession = null;
-  if (!clip) {
-    strumBusy = false;
-    renderStrumPanel(t('strum.timeout'));
-    $('#strumAgain').hidden = false;
-    return;
-  }
-  $('#strumStatus').textContent = t('strum.analyzing');
-  const res = await analyzeLater(clip, mic.sampleRate, expected);
+  const out = await runStrumTakes({ takes: S.strumTakes === 3 ? 3 : 1, prompt, expected: strumExpected() });
+  if (!out) return;
   strumBusy = false;
   $('#strumAgain').hidden = false;
-  if (!res.ok) { renderStrumPanel(t('strum.timeout')); return; }
+  if (!out.results.length) { renderStrumPanel(t('strum.timeout')); return; }
+  const res = out.results.length > 1 ? combineStrums(out.results) : out.results[0];
+  rememberStiffness(res);
   // Tick the strings the strum confirmed, clear the ones it found out of tune.
   const tol = boardTol();
   res.strings.forEach((x, i) => {
@@ -762,29 +986,220 @@ async function startStrumCheck(opts = {}) {
     tunedTracker.tuned[i] = Math.abs(x.cents) <= tol;
     tunedTracker.timeIn[i] = 0;
   });
-  board = {
-    rows: res.strings.map((x) => ({
-      cents: x.state === 'ok' || x.state === 'unsure' ? x.cents : null, state: x.state, done: false,
-    })),
-    focus: -1, live: -1, cand: -1, candAt: 0, guided: false, finished: false, queue: [], prev: null,
-  };
+  board = makeBoard(res, out);
   renderBoard();
   ensurePanelVisible();
   // Fitting a guitar: go straight into the string-by-string guide.
-  if (fit && board.rows.some((r) => needsWork(r, boardTol(), S.tolerance))) startGuide();
+  if (mode === 'fit' && board.rows.some((r) => needsWork(r, boardTol(), S.tolerance))) startGuide();
+}
+
+/** Floating bridge, step 1: a reference strum, then detune the 6th string on purpose. */
+async function measureBridge() {
+  if (!mic.running) {
+    await startMic();
+    if (!mic.running) return;
+  }
+  prepareStrum('bridge');
+  renderStrumPanel(t('bridge.step1'));
+  const out = await runStrumTakes({ takes: 1, prompt: t('bridge.step1'), expected: strumExpected() });
+  if (!out) return;
+  strumBusy = false;
+  $('#strumAgain').hidden = false;
+  if (!out.results.length) { renderStrumPanel(t('strum.timeout')); return; }
+  board = makeBoard(out.results[0], out);
+  bridgeCal = { before: out.results[0].strings.map((x) => (hasValue(x) ? x.cents : null)) };
+  renderBoard();
+  boardFocus(0); // watch the 6th string live while detuning it
+  ensurePanelVisible();
+}
+
+/** Floating bridge, step 2: strum again and see how far the other strings moved. */
+async function finishBridge() {
+  if (!bridgeCal) return;
+  const before = bridgeCal.before;
+  const expected = strumExpected();
+  boardRelease();
+  bridgeCal = null;
+  prepareStrum('bridge');
+  renderStrumPanel(t('bridge.step2'));
+  const out = await runStrumTakes({ takes: 1, prompt: t('bridge.step2'), expected });
+  if (!out) return;
+  strumBusy = false;
+  $('#strumAgain').hidden = false;
+  if (!out.results.length) { renderStrumPanel(t('strum.timeout')); return; }
+  const after = out.results[0].strings.map((x) => (hasValue(x) ? x.cents : null));
+  const est = estimateBridge(before, after, 0);
+  board = makeBoard(out.results[0], out);
+  if (est.ok) {
+    const others = est.rho.filter((r) => r !== null);
+    const drop10 = -10 * others.reduce((a, b) => a + b, 0) / others.length;
+    S.bridge = { q: est.q.map((v) => Number(v.toFixed(3))), date: new Date().toISOString().slice(0, 10), dj: Number(est.dj.toFixed(1)), drop10: Number(drop10.toFixed(2)) };
+    S.bridgeComp = true;
+    persist();
+    board.message = t('bridge.measured', { string: stringName(0), d: fmtSigned(est.dj, 0), c: fmt(drop10, 1) });
+  } else if (est.reason === 'small') {
+    board.message = t('bridge.tooSmall', { string: stringName(0), d: fmtSigned(est.dj, 1) });
+  } else {
+    board.message = t('bridge.unread');
+  }
+  renderBoard();
+  ensurePanelVisible();
+}
+
+/** Save the board's strums as a WAV with the readings inside, for diagnosis. */
+async function exportBoardClips() {
+  if (!board || !board.clips || !board.clips.length) return;
+  const sr = mic.sampleRate;
+  const { samples, starts } = joinClips(board.clips.map((c) => c.samples), sr);
+  const slim = (s) => ({
+    state: s.state, cents: Number.isFinite(s.cents) ? Number(s.cents.toFixed(2)) : null,
+    freq: s.freq ? Number(s.freq.toFixed(4)) : null, B: s.B ? Number(s.B.toPrecision(3)) : null,
+    partials: s.partials ? s.partials.length : 0, rms: Number.isFinite(s.rms) ? Number(s.rms.toFixed(3)) : null,
+  });
+  const meta = {
+    app: 'strobe-tuner', kind: `strum-${strumMode}`, date: new Date().toISOString(), sampleRate: sr,
+    tuning: currentTuning().notes, capo: S.capo, a4: S.a4, globalCents: S.globalCents, sweetener: S.sweetenerId,
+    targets: targets.map((x) => Number(x.freq.toFixed(4))),
+    takes: board.results.map((r, k) => ({ start: starts[k], onset: board.clips[k].onset, strings: r.strings.map(slim) })),
+    median: board.combined ? board.combined.strings.map(slim) : null,
+    ua: navigator.userAgent,
+  };
+  const bytes = encodeWav(samples, sr, { comment: JSON.stringify(meta) });
+  const how = await shareFile(bytes, `strum-${stamp()}.wav`, 'audio/wav', { title: t('export.title') });
+  if (how === 'downloaded') announce(t('export.saved'));
 }
 
 function cancelStrumCheck(hide = true) {
+  strumToken++;
   if (strumSession) strumSession.cancel();
   strumSession = null;
   strumBusy = false;
   if (hide) {
-    if (board) { board.guided = false; boardRelease(); }
+    bridgeCal = null;
+    if (board) { board.guided = false; board.tau = null; boardRelease(); }
+    refOffset.fill(0);
     board = null;
-    strumFit = false;
+    strumMode = 'normal';
     setStrumTitle();
     $('#strumPanel').hidden = true;
   }
+}
+
+// ── A4 from a reference note ───────────────────────────────────────────
+// Play one long note on the instrument you are joining (piano, keyboard, tuning
+// fork). The strobe locks on the nearest equal-tempered note at A4 = 440 Hz and
+// reads its deviation; A4 is then set so that note becomes the reference.
+let a4cal = null;   // { start, readings, midi, prev }
+let a4Undo = null;
+const median = (v) => { const a = v.slice().sort((x, y) => x - y); const m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+
+async function startA4Cal() {
+  if (!mic.running) {
+    await startMic();
+    if (!mic.running) return;
+  }
+  cancelStrumCheck(true);
+  a4cal = { start: performance.now(), readings: [], midi: null, prev: S.a4 };
+  activeString = -1; // the strobe follows the reference note, not a string
+  $('#a4Cal').disabled = true;
+  $('#a4Undo').hidden = true;
+  $('#a4CalStatus').textContent = t('a4cal.listen');
+}
+
+function a4calLock(r) {
+  if (r.clarity < 0.93) return;
+  const midi = Math.round(freqToMidi(r.freq, 440));
+  if (midi !== a4cal.midi) {
+    a4cal.midi = midi;
+    a4cal.readings = [];
+    engine.setReference(440 * Math.pow(2, (midi - 69) / 12));
+  }
+}
+
+function a4calRead(er, now) {
+  if (now - a4cal.start > 15000) { finishA4Cal(null); return; }
+  if (a4cal.midi === null || !er.valid || Math.abs(er.cents) > 50) return;
+  if (!(lastMpm && lastMpm.freq && lastMpm.clarity >= 0.93)) return;
+  const rs = a4cal.readings;
+  rs.push(er.cents);
+  if (rs.length > 150) rs.shift();
+  if (rs.length >= 60) {
+    const m = median(rs);
+    if (median(rs.map((c) => Math.abs(c - m))) < 0.6) finishA4Cal(m);
+  }
+}
+
+function finishA4Cal(c) {
+  const st = a4cal;
+  a4cal = null;
+  $('#a4Cal').disabled = false;
+  if (c === null) { $('#a4CalStatus').textContent = t('a4cal.timeout'); return; }
+  // The heard note becomes the target: midiToFreq(midi, a4) · 2^(global/1200) = heard.
+  const hz = Math.round(440 * Math.pow(2, (c - S.globalCents) / 1200) * 10) / 10;
+  a4Undo = st.prev;
+  S.a4 = Math.max(350, Math.min(550, hz));
+  afterSetting();
+  $('#a4Undo').hidden = false;
+  $('#a4CalStatus').textContent = t('a4cal.done', { note: noteLabel(st.midi), c: fmtSigned(c, 1), hz: fmt(S.a4, 1) });
+}
+
+// ── Guitar profile files ───────────────────────────────────────────────
+async function exportGuitars() {
+  if (!S.guitars.length) return;
+  const data = { app: 'strobe-tuner', type: 'guitar-profiles', version: 1, exported: new Date().toISOString(), guitars: S.guitars, bridge: S.bridge || null };
+  const how = await shareFile(JSON.stringify(data, null, 1), `guitars-${stamp()}.json`, 'application/json', { title: t('fit.exportTitle') });
+  $('#fitIO').textContent = how === 'cancelled' ? '' : t('fit.exported', { n: S.guitars.length });
+}
+
+const finiteOr0 = (v) => (Number.isFinite(v) ? v : 0);
+function cleanProfile(g) {
+  if (!g || typeof g !== 'object' || typeof g.name !== 'string') return null;
+  if (!Array.isArray(g.notes) || g.notes.length !== 6 || !Array.isArray(g.strings) || g.strings.length !== 6) return null;
+  if (!Number.isFinite(g.scaleMm) || g.scaleMm < 300 || g.scaleMm > 1200) return null;
+  try { g.notes.forEach((n) => { if (!Number.isFinite(parseNote(n))) throw new Error('note'); }); } catch { return null; }
+  const strings = g.strings.map((x) => {
+    if (!x || typeof x !== 'object' || !x.model) return null;
+    return {
+      midi: finiteOr0(x.midi), B: Number.isFinite(x.B) && x.B > 0 && x.B < 0.01 ? x.B : 5e-5,
+      amps: Array.isArray(x.amps) ? x.amps.slice(0, 8).map(finiteOr0) : [1, 0.5, 0.33, 0.25, 0.2, 0.17, 0.14, 0.12],
+      openMeasured: !!x.openMeasured,
+      points: Array.isArray(x.points) ? x.points.filter((p) => p && Number.isFinite(p.k) && Number.isFinite(p.d)).map((p) => ({ k: p.k, d: p.d })) : [],
+      model: { alpha: finiteOr0(x.model.alpha), beta: finiteOr0(x.model.beta), gamma: finiteOr0(x.model.gamma) },
+      saddleMm: finiteOr0(x.saddleMm),
+    };
+  });
+  if (!strings.some(Boolean)) return null;
+  return {
+    id: typeof g.id === 'string' ? g.id.slice(0, 40) : `g${Date.now().toString(36)}`,
+    name: g.name.slice(0, 40), scaleMm: g.scaleMm, notes: g.notes.slice(), strings,
+    created: typeof g.created === 'string' ? g.created.slice(0, 10) : new Date().toISOString().slice(0, 10),
+  };
+}
+
+async function importGuitars() {
+  const text = await pickTextFile();
+  if (text === null) return;
+  let data;
+  try { data = JSON.parse(text); } catch { $('#fitIO').textContent = t('fit.importBad'); return; }
+  const list = Array.isArray(data) ? data : (data && Array.isArray(data.guitars) ? data.guitars : [data]);
+  let added = 0, last = null;
+  for (const raw of list) {
+    const g = cleanProfile(raw);
+    if (!g) continue;
+    const same = S.guitars.find((x) => x.id === g.id);
+    if (same && same.name === g.name && same.created === g.created) { last = same.id; continue; } // already here
+    if (same) g.id = `g${Date.now().toString(36)}${added}`;
+    S.guitars.push(g);
+    last = g.id;
+    added++;
+  }
+  const bq = data && data.bridge && Array.isArray(data.bridge.q) && data.bridge.q.length === 6 && data.bridge.q.every(Number.isFinite) ? data.bridge : null;
+  if (bq && !S.bridge) S.bridge = { q: bq.q.slice(), date: String(bq.date || ''), dj: finiteOr0(bq.dj), drop10: finiteOr0(bq.drop10) };
+  if (!last) { $('#fitIO').textContent = t('fit.importBad'); return; }
+  S.guitarId = last;
+  S.sweetenerId = 'guitar-fit';
+  persist(); recompute(); renderHeader(); renderSweeten();
+  $('#fitIO').textContent = added ? t('fit.imported', { n: added }) : t('fit.importSame');
 }
 
 // ── Guitar profiles ────────────────────────────────────────────────────
@@ -801,7 +1216,8 @@ function startWizard() {
   cancelStrumCheck();
   const tuning = currentTuning();
   openWizard({
-    t, fmt, fmtSigned, stringName, stringShort,
+    t, fmt, fmtSigned, stringName, stringShort, listSep,
+    appInfo: () => ({ a4: S.a4, globalCents: S.globalCents, capo: S.capo }),
     stringNote: (i, k) => noteLabel(parseNote(tuning.notes[i]) + k, useFlats(tuning)),
     tuning: () => tuning,
     tuningLabel: () => nameOf(tuning).text,
@@ -835,17 +1251,32 @@ function renderFitBlock() {
   sel.hidden = !S.guitars.length;
   $('#fitDelete').hidden = !S.guitars.length;
   $('#fitTune').hidden = !S.guitars.length;
+  $('#fitExport').hidden = !S.guitars.length;
   $('#fitEmpty').hidden = !!S.guitars.length;
   const prof = currentProfile();
   if (prof) sel.value = prof.id;
   $('#fitMeta').textContent = prof ? t('fit.measured', { date: prof.created, tuning: prof.notes.map((n) => noteName(parseNote(n), useFlats())).join(' ') }) : '';
-  $('#fitTable').innerHTML = prof ? fitTableHtml(prof, { t, fmt, fmtSigned, stringShort }) : '';
+  $('#fitTable').innerHTML = prof ? fitTableHtml(prof, { t, fmt, fmtSigned, stringShort, listSep }) : '';
   $('#fitSaddleNote').textContent = prof ? t('fit.saddleNote', { mm: prof.scaleMm }) : '';
 }
 
 function bindFit() {
   $('#strumBtn').addEventListener('click', () => startStrumCheck());
-  $('#strumAgain').addEventListener('click', () => startStrumCheck({ fit: strumFit }));
+  $('#strumAgain').addEventListener('click', () => startStrumCheck({ mode: strumMode === 'bridge' ? 'normal' : strumMode }));
+  $('#strumExport').addEventListener('click', exportBoardClips);
+  $('#capoCheck').addEventListener('click', () => startStrumCheck({ mode: 'capo' }));
+  $$('[data-takes]').forEach((b) => b.addEventListener('click', () => {
+    S.strumTakes = Number(b.dataset.takes) === 3 ? 3 : 1;
+    persist();
+    renderStrumOptions();
+  }));
+  $('#bridgeToggle').addEventListener('change', (e) => {
+    S.bridgeComp = e.target.checked;
+    persist();
+    if (board) renderBoard(); else renderStrumOptions();
+  });
+  $('#bridgeMeasure').addEventListener('click', measureBridge);
+  $('#bridgeNext').addEventListener('click', finishBridge);
   $('#fitTune').addEventListener('click', tuneToGuitar);
   $('#sweetNoteAction').addEventListener('click', startWizard);
   $('#sweetLine').addEventListener('click', (e) => { if (e.target.closest('#sweetLineAction')) startWizard(); });
@@ -854,6 +1285,8 @@ function bindFit() {
   $('#strumGuide').addEventListener('click', startGuide);
   $('#strumStop').addEventListener('click', stopGuide);
   $('#fitMeasure').addEventListener('click', startWizard);
+  $('#fitExport').addEventListener('click', exportGuitars);
+  $('#fitImport').addEventListener('click', importGuitars);
   $('#fitSelect').addEventListener('change', (e) => {
     S.guitarId = e.target.value;
     persist(); recompute(); renderHeader(); renderSweeten();
@@ -896,6 +1329,7 @@ function renderHeader() {
   a4.textContent = t('chip.a4', { note: noteLabel(69), hz: fmt(S.a4, S.a4 % 1 ? 1 : 0) });
   a4.classList.toggle('is-on', S.a4 !== 440 || S.globalCents !== 0);
   $('#capoLabel').textContent = S.capo ? t('capo.n', { n: S.capo }) : t('capo.none');
+  $('#capoCheck').hidden = !S.capo;
   $('#intonation').checked = S.intonation;
   $$('[data-mode]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === S.mode)));
 
@@ -1134,6 +1568,8 @@ function renderSettings() {
   $('#leftHanded').checked = S.leftHanded;
   $('#flats').checked = S.flats;
   $('#keepAwake').checked = S.keepAwake;
+  $('#cueVibrate').checked = S.cueVibrate !== false;
+  $('#cueSound').checked = S.cueSound !== false;
 }
 
 async function changeLanguage(code, terms) {
@@ -1154,6 +1590,25 @@ function bindSettings() {
   $$('[data-terms]').forEach((b) => b.addEventListener('click', () => changeLanguage(currentLanguage(), b.dataset.terms)));
   $('#a4').addEventListener('input', (e) => { S.a4 = Number(e.target.value); afterSetting(); });
   $$('[data-a4]').forEach((b) => b.addEventListener('click', () => { S.a4 = Number(b.dataset.a4); afterSetting(); }));
+  $('#a4Cal').addEventListener('click', startA4Cal);
+  $('#a4Undo').addEventListener('click', () => {
+    if (a4Undo === null) return;
+    S.a4 = a4Undo;
+    a4Undo = null;
+    $('#a4Undo').hidden = true;
+    $('#a4CalStatus').textContent = '';
+    afterSetting();
+  });
+  $('#cueVibrate').addEventListener('change', (e) => {
+    S.cueVibrate = e.target.checked;
+    persist();
+    if (S.cueVibrate) cue.buzz(false); // let the user feel it once
+  });
+  $('#cueSound').addEventListener('change', (e) => {
+    S.cueSound = e.target.checked;
+    persist();
+    if (S.cueSound) cue.chime(false);
+  });
   $('#globalCents').addEventListener('input', (e) => { S.globalCents = Number(e.target.value); afterSetting(); });
   $('#gate').addEventListener('input', (e) => { S.gateDb = Number(e.target.value); afterSetting(); });
   $$('[data-tol]').forEach((b) => b.addEventListener('click', () => { S.tolerance = Number(b.dataset.tol); afterSetting(); }));

@@ -14,6 +14,12 @@ export const DEFAULTS = {
   custom: { open: [0, 0, 0, 0, 0, 0], fret12: [0, 0, 0, 0, 0, 0] },
   guitars: [],                // measured guitar profiles (guitar-fit.js makeProfile)
   guitarId: null,             // active profile for the "This guitar" sweetener
+  stringB: [],                // last fitted stiffness per string [{midi, B}], a prior for strum analysis
+  strumTakes: 1,              // strums per strum check (1, or 3 for the median)
+  bridgeComp: false,          // floating-bridge compensation in the guide
+  bridge: null,               // measured coupling {q:[6], date, dj, drop10}
+  cueVibrate: true,           // vibrate when a string becomes tuned
+  cueSound: true,             // chime when a string becomes tuned
   temperamentId: 'equal',
   temperamentRoot: 0,
   a4: 440,

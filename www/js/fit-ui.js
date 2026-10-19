@@ -3,7 +3,9 @@
 
 import { StrumCapture } from './strum-capture.js';
 import { analyzeStrum, combineStrums, DEFAULT_B } from './poly.js';
-import { MEASURE_FRETS, SCALE_PRESETS, makeProfile, openReference, optimizeOffsets, fretError } from './guitar-fit.js';
+import { MEASURE_FRETS, SCALE_PRESETS, makeProfile, openReference, optimizeOffsets, fretError, FRET_V } from './guitar-fit.js';
+import { encodeWav, joinClips } from './wav.js';
+import { shareFile, stamp } from './share-file.js';
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -175,7 +177,8 @@ export function updateTuneRow(el, i, row, o) {
   const className = cls.join(' ');
   if (li.className !== className) li.className = className;
   if (valEl.textContent !== val) valEl.textContent = val;
-  const advice = row ? boardAdvice(row, o.tolerance, o.t, o.liveTolerance ?? o.tolerance) : '';
+  const custom = o.advice ? o.advice(i, row) : null;
+  const advice = custom !== null && custom !== undefined ? custom : (row ? boardAdvice(row, o.tolerance, o.t, o.liveTolerance ?? o.tolerance) : '');
   if (advEl.textContent !== advice) advEl.textContent = advice;
   btn.setAttribute('aria-pressed', String(o.focus === i));
   btn.setAttribute('aria-label', o.t('board.rowAria', { string: o.stringName(i), value: val, advice }));
@@ -206,6 +209,7 @@ export function openWizard(ctx) {
     open: null,
     frets: {},
     runs: {},      // per step: every analysed strum, combined by median
+    clips: {},     // per step: the audio of each strum, for exporting
     takes: 5,      // strums per step
     session: null,
   };
@@ -304,7 +308,9 @@ export function openWizard(ctx) {
     const total = state.takes;
     const minTakes = Math.min(3, total);
     if (!state.runs[k]) state.runs[k] = [];
+    if (!state.clips[k]) state.clips[k] = [];
     const runs = state.runs[k];
+    const clips = state.clips[k];
     body.innerHTML = `
       <div class="wiz-measure">
         <div class="fret-badge" aria-hidden="true">${k === 0 ? '0' : k}</div>
@@ -369,6 +375,7 @@ export function openWizard(ctx) {
         if (state.closed || state.session !== null || steps[state.i] !== (k === 0 ? 'open' : `fret${k}`)) return;
         if (!res.ok) { show(t('strum.timeout')); listen(); return; }
         runs.push(res);
+        clips.push({ samples: Float32Array.from(clip.samples), onset: clip.onset });
         show();
         listen(); // straight on to the next strum until the step has all of them
       });
@@ -376,8 +383,8 @@ export function openWizard(ctx) {
     show();
     listen();
     foot.querySelector('#wizCancel').addEventListener('click', close);
-    foot.querySelector('#wizRedo').addEventListener('click', () => { runs.length = 0; show(); listen(); });
-    foot.querySelector('#wizSkip')?.addEventListener('click', () => { stopSession(); delete state.frets[k]; delete state.runs[k]; state.i++; render(); });
+    foot.querySelector('#wizRedo').addEventListener('click', () => { runs.length = 0; clips.length = 0; show(); listen(); });
+    foot.querySelector('#wizSkip')?.addEventListener('click', () => { stopSession(); delete state.frets[k]; delete state.runs[k]; delete state.clips[k]; state.i++; render(); });
     next.addEventListener('click', () => { stopSession(); state.i++; render(); });
   }
 
@@ -402,7 +409,8 @@ export function openWizard(ctx) {
         <div class="range-ends"><span>${esc(t('fit.goal.et'))}</span><span>${esc(t('fit.goal.sweet'))}</span></div>
       </div>
       <ol class="offset-list" id="wizOffsets">${offsetsHtml()}</ol>
-      <p class="note">${esc(t('wiz.nextTune'))}</p>`;
+      <p class="note">${esc(t('wiz.nextTune'))}</p>
+      <p class="row"><button type="button" class="btn btn-quiet" id="wizExport">${esc(t('wiz.export'))}</button></p>`;
     const out = body.querySelector('#wizGoalOut');
     const list = body.querySelector('#wizOffsets');
     const showGoal = () => { out.textContent = `${ctx.fmt(Math.round(goal * 100), 0)} %`; };
@@ -415,6 +423,7 @@ export function openWizard(ctx) {
     foot.innerHTML = button('wizCancel', t('wiz.cancel'), 'btn btn-quiet')
       + button('wizSave', t('wiz.save'))
       + button('wizSaveTune', t('wiz.saveTune'), 'btn is-on');
+    body.querySelector('#wizExport').addEventListener('click', exportClips);
     foot.querySelector('#wizCancel').addEventListener('click', close);
     foot.querySelector('#wizSave').addEventListener('click', () => {
       ctx.onSave(profile, goal);
@@ -425,6 +434,36 @@ export function openWizard(ctx) {
       close();
       ctx.onTune?.();
     });
+  }
+
+  /** All strums of the measurement as one WAV, with every reading inside. */
+  function exportClips() {
+    const sr = ctx.sampleRate();
+    const order = [0, ...MEASURE_FRETS].filter((k) => state.clips[k] && state.clips[k].length);
+    const flat = [];
+    order.forEach((k) => state.clips[k].forEach((c, j) => flat.push({ k, j, c })));
+    if (!flat.length) return;
+    const { samples, starts } = joinClips(flat.map((x) => x.c.samples), sr);
+    const slim = (x) => ({
+      state: x.state, cents: Number.isFinite(x.cents) ? Number(x.cents.toFixed(2)) : null,
+      freq: x.freq ? Number(x.freq.toFixed(4)) : null, B: x.B ? Number(x.B.toPrecision(3)) : null,
+      partials: x.partials ? x.partials.length : 0, spread: Number.isFinite(x.spread) ? Number(x.spread.toFixed(2)) : undefined,
+    });
+    const meta = {
+      app: 'strobe-tuner', kind: 'guitar-fit', date: new Date().toISOString(), sampleRate: sr,
+      name: state.name, scaleMm: state.scale, tuning: state.notes, openTargets: state.targets.map((f) => Number(f.toFixed(4))),
+      ...(ctx.appInfo ? ctx.appInfo() : {}),
+      steps: order.map((k) => ({
+        fret: k,
+        takes: state.runs[k].map((r, j) => {
+          const at = flat.findIndex((x) => x.k === k && x.j === j);
+          return { start: starts[at], onset: state.clips[k][j].onset, strings: r.strings.map(slim) };
+        }),
+        median: combineStrums(state.runs[k]).strings.map(slim),
+      })),
+      ua: navigator.userAgent,
+    };
+    shareFile(encodeWav(samples, sr, { comment: JSON.stringify(meta) }), `guitar-fit-${stamp()}.wav`, 'audio/wav', { title: t('export.title') });
   }
 
   function close() {
@@ -456,5 +495,27 @@ export function fitTableHtml(profile, ctx) {
       : mm > 0 ? t('fit.saddle.back', { mm: ctx.fmt(Math.abs(mm), 1) }) : t('fit.saddle.forward', { mm: ctx.fmt(Math.abs(mm), 1) });
     return `<tr><th scope="row">${esc(name)}</th>${cells}<td class="${Math.abs(mm) >= 0.3 ? 'is-warn' : ''}">${esc(saddle)}</td></tr>`;
   }).join('');
-  return `<div class="table-wrap"><table class="fit-table"><caption>${esc(t('fit.tableCaption'))}</caption><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
+  const nut = nutAdvice(profile, ctx);
+  return `<div class="table-wrap"><table class="fit-table"><caption>${esc(t('fit.tableCaption'))}</caption><thead>${head}</thead><tbody>${rows}</tbody></table></div>${nut ? `<p class="note fit-nut">${esc(nut)}</p>` : ''}`;
+}
+
+/** Cents by which the nut term makes fret 1 sharper than fret 5 (needs a fret-2 measurement). */
+export function nutExcess(str) {
+  if (!str || !str.model || !str.points || !str.points.some((p) => p.k <= 3)) return null;
+  return (str.model.gamma || 0) * (FRET_V(1) - FRET_V(5));
+}
+export const NUT_WARN = 1.5;
+
+/**
+ * Nut advice: a nut slot cut too high (or a nut that needs compensation) makes the
+ * first frets sharp on top of the even error the saddle cannot remove.
+ */
+export function nutAdvice(profile, ctx) {
+  const { t } = ctx;
+  const sep = ctx.listSep ? ctx.listSep() : ', ';
+  const vals = profile.strings.map((s) => nutExcess(s));
+  if (vals.every((v) => v === null)) return '';
+  const high = vals.map((v, i) => ({ v, i })).filter((x) => x.v !== null && x.v > NUT_WARN);
+  if (!high.length) return t('fit.nut.ok');
+  return t('fit.nut.high', { list: high.map((x) => `${ctx.stringShort(x.i)} ${ctx.fmtSigned(x.v, 1)} ¢`).join(sep) });
 }

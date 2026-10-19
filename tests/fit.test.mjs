@@ -132,3 +132,21 @@ test('tune board: live rows use the user tolerance, strum rows at least 1 cent',
   assert.notEqual(boardAdvice({ state: 'live', cents: 0.8 }, 1, t, 0.5), 'board.ok');
   assert.equal(boardAdvice({ state: 'live', cents: 0.4 }, 1, t, 0.5), 'board.ok');
 });
+
+test('nut advice: flags strings whose first frets are extra sharp', async () => {
+  const { nutAdvice, nutExcess } = await import('../www/js/fit-ui.js');
+  const { fitFretModel, FRET_U, FRET_V } = await import('../www/js/guitar-fit.js');
+  const ctx = { t: (k, p = {}) => `${k}${p.list ? `:${p.list}` : ''}`, stringShort: (i) => `${6 - i}`, fmtSigned: (v) => (v >= 0 ? '+' : '') + v.toFixed(1) };
+  // String 3 (index 3) has a high nut slot: an extra 0.4·v(k) cents, large at the first frets.
+  const strings = [0, 1, 2, 3, 4, 5].map((i) => {
+    const points = [2, 7, 12].map((k) => ({ k, d: 1 + 2 * FRET_U(k) + (i === 3 ? 0.4 * FRET_V(k) : 0) }));
+    return { model: fitFretModel(points), points };
+  });
+  assert.ok(nutExcess(strings[3]) > 1.5, `excess ${nutExcess(strings[3])}`);
+  assert.ok(Math.abs(nutExcess(strings[0])) < 0.3);
+  assert.match(nutAdvice({ strings }, ctx), /^fit\.nut\.high:3 \+/);
+  const fine = strings.map((s, i) => (i === 3 ? strings[0] : s));
+  assert.equal(nutAdvice({ strings: fine }, ctx), 'fit.nut.ok');
+  // Without a low-fret measurement there is nothing to say.
+  assert.equal(nutAdvice({ strings: strings.map((s) => ({ ...s, points: s.points.filter((p) => p.k > 3) })) }, ctx), '');
+});

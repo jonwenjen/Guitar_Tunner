@@ -561,3 +561,34 @@ html[data-theme='daylight'] .fit-table td.is-warn { color: #b0470c; }
 .srow-spread { display: block; font-size: 0.72rem; color: var(--ink-faint); line-height: 1.1; }
 .srow.is-spread .srow-spread { color: var(--light); }
 html[data-theme='daylight'] .srow.is-spread .srow-spread { color: #b0470c; }
+
+/* Focus card: the string being tuned, large enough to read with eyes on the pegs. */
+.board-focus {
+  display: grid; gap: 4px; justify-items: center; text-align: center;
+  padding: 12px 12px 10px; border-radius: 12px; margin: 2px 0 4px;
+  background: color-mix(in srgb, var(--brass) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brass) 45%, transparent);
+}
+.board-focus p { margin: 0; }
+.bf-name { font-size: 0.95rem; color: var(--ink-dim); font-weight: 600; }
+.bf-cents { font-size: clamp(2.4rem, 12vw, 3.4rem); line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.board-focus.is-ok .bf-cents, .board-focus.is-ok .bf-advice { color: var(--patina); }
+.board-focus.is-off .bf-advice { color: var(--light); }
+html[data-theme='daylight'] .board-focus.is-off .bf-advice { color: #b0470c; }
+.bf-advice { font-size: 1.15rem; font-weight: 600; }
+.bf-note { font-size: 0.8rem; color: var(--ink-dim); min-height: 1em; }
+.bf-note:empty { display: none; }
+.bf-gauge { position: relative; width: 100%; height: 14px; border-radius: 7px; background: color-mix(in srgb, var(--ink) 8%, transparent); margin: 4px 0 2px; }
+.bf-gauge s { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; background: var(--ink-faint); text-decoration: none; }
+.bf-gauge b { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--patina) 30%, transparent); border-radius: 7px; }
+.bf-gauge i { position: absolute; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: var(--light); box-shadow: 0 0 10px var(--light); transition: left 90ms linear; }
+.board-focus.is-ok .bf-gauge i { background: var(--patina); box-shadow: 0 0 10px var(--patina); }
+.board-focus.is-live { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--light) 55%, transparent); }
+.board-focus.is-live.is-ok { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--patina) 60%, transparent); }
+@media (prefers-reduced-motion: reduce) { .bf-gauge i { transition: none; } }
+
+/* Options under the board. */
+.strum-options { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 2px; }
+.strum-options .field { margin: 0; }
+.bridge-field .note { margin: 2px 0 4px; }
+#capoCheck { padding-inline: 12px; }

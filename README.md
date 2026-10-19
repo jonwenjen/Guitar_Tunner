@@ -13,6 +13,11 @@ A true-strobe guitar tuner for the web, Android and iOS, modelled on the feature
 - **Six-string recognition.** Pluck any open string: the app finds which string it is, highlights its tuner on a 3+3 or 6-in-line headstock, tells you to tighten or loosen, and ticks each string off once it holds steady. Tap a tuner to lock that string.
 - **Strum check you can tune from.** Strum all six strings once: the app reads every string from the single chord — any tuning, not just standard and drop — and tells you, per string, which way to turn and roughly how far. Then pluck any string and its row follows live; tap a row to lock the tuner on it, or press *Guide me* to be taken through each string that needs work, low to high, ending with a reminder to strum again (tuning one string shifts the neck tension). Strings whose overtones collide with another string's are marked *pluck alone* instead of guessed.
 - **Fit this guitar.** Every guitar's compensation is different. Four measuring steps (open strings, then a barre at frets 2, 7 and 12), each strummed five times with the median kept per string so one bad strum cannot skew it, measure this guitar's fretting error on every string, give saddle advice in millimetres, and compute the open-string offsets that suit this instrument in the current tuning — from "match other instruments" to "sweetest chords", using its own measured overtones. It runs as six numbered steps: four measuring steps, results and goal, then *Save and tune*, which strums against the new targets and guides you string by string. Save several guitars; *Tune to this guitar* repeats the tuning step any time.
+- **Floating bridge compensation.** On a Floyd Rose or other floating tremolo, tuning one string pulls the others. Two strums measure how much (raise the 6th string about 30 ¢ in between); the guide then parks each string at a temporary target so all six land in tune in one pass.
+- **Capo check.** With a capo set, one strum shows how far the capo pulls each string sharp, with advice to reseat it or retune with it on.
+- **Tuning by feel.** A large display of the string being tuned, a vibration and a soft chime when it is in tune (Settings), and an optional median of three strums per check.
+- **Reference calibration.** Play one long note on a piano or keyboard and A4 is set to match it (undo available).
+- **Diagnostics and sharing.** Export any strum check or measurement as a WAV with the app's readings embedded, and export or import measured guitars as a file (web ↔ app, phone ↔ phone).
 - **Sweetened tunings.** Just-chord sweetener for open and modal tunings, a least-squares open-chord fit for standard shapes, a measured strobe-style "GTR" preset, and fully custom open-string plus 12th-fret offsets (the Buzz Feiten structure). A sweetness control sets how far each moves from equal temperament.
 - **Temperaments.** Equal, Pythagorean, just major, ¼-comma meantone, Werckmeister III, Kirnberger III, Young II and Kellner in any key — the Strobe Center 5000-II set, computed from their definitions.
 - **Tuning library.** 35 tunings in eight families with interval maps, history and citations; make and save your own.
@@ -82,6 +87,10 @@ www/                 the app (plain ES modules, no build step)
   js/strum-capture.js  onset-triggered capture of a strum from the live input
   js/guitar-fit.js     fretting-error model, saddle advice, per-guitar offset optimiser
   js/fit-ui.js         strum check rows and the "Measure a guitar" wizard
+  js/bridge.js         floating-bridge coupling model and one-pass tuning plan
+  js/wav.js            WAV export with the readings embedded (LIST/INFO comment)
+  js/share-file.js     share sheet / download / file import
+  js/feedback.js       vibration and chime when a string is in tune
   js/temperaments.js   historical temperaments
   js/tunings.js        tuning library
   js/headstock.js      headstock diagram
@@ -96,7 +105,7 @@ assets/              icon and splash sources for the native apps
 ## Tests
 
 ```bash
-npm test             # 50 tests: detection on every string, strobe accuracy, string ID in all 35 tunings,
+npm test             # 56 tests: detection on every string, strobe accuracy, string ID in all 35 tunings,
                      # temperament tables, sweetener values, targets with capo/A4/sweeteners, one-strum
                      # readings (standard, drop, open, barre, muted), the guitar-fit model and optimiser,
                      # and that every language translates every string in all term modes

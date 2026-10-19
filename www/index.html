@@ -77,6 +77,7 @@
               <button type="button" id="capoDown" aria-label="Capo down" data-i18n-aria="capo.down">−</button>
               <button type="button" id="capoUp" aria-label="Capo up" data-i18n-aria="capo.up">+</button>
             </div>
+            <button class="btn btn-quiet" type="button" id="capoCheck" data-i18n="capo.check" hidden>Check capo</button>
           </div>
           <div class="deck-row deck-tools">
             <button class="btn" type="button" id="strumBtn" data-i18n="strum.button">Strum check</button>
@@ -89,13 +90,38 @@
               <button class="icon-btn" type="button" id="strumClose" aria-label="Close" data-i18n-aria="strum.close">×</button>
             </div>
             <p class="strum-status" id="strumStatus" aria-live="polite"></p>
+            <div class="board-focus" id="boardFocusCard" hidden>
+              <p class="bf-name"></p>
+              <p class="bf-cents"></p>
+              <div class="bf-gauge" aria-hidden="true"><b></b><s></s><i></i></div>
+              <p class="bf-advice"></p>
+              <p class="bf-note"></p>
+            </div>
             <ol class="strum-rows" id="strumRows"></ol>
             <p class="strum-plan" id="strumPlan" hidden></p>
             <p class="note" id="strumHint" hidden data-i18n="strum.hint"></p>
             <div class="row strum-actions">
+              <button class="btn is-on" type="button" id="bridgeNext" data-i18n="bridge.next" hidden>Strum again</button>
               <button class="btn is-on" type="button" id="strumGuide" data-i18n="board.guide" hidden>Guide me</button>
               <button class="btn" type="button" id="strumStop" data-i18n="board.stopGuide" hidden>Stop guide</button>
               <button class="btn" type="button" id="strumAgain" data-i18n="strum.again" hidden>Strum again</button>
+              <button class="btn btn-quiet" type="button" id="strumExport" data-i18n="export.button" hidden>Export recording</button>
+            </div>
+            <div class="strum-options">
+              <div class="field">
+                <span class="field-label" data-i18n="strum.takesLabel">Strums per check</span>
+                <div class="seg" role="radiogroup" aria-label="Strums per check" data-i18n-aria="strum.takesLabel">
+                  <button type="button" role="radio" data-takes="1" data-i18n="strum.takes1">1</button>
+                  <button type="button" role="radio" data-takes="3" data-i18n="strum.takes3">3 (median)</button>
+                </div>
+              </div>
+              <div class="field bridge-field">
+                <label class="toggle"><input type="checkbox" id="bridgeToggle"><span data-i18n="bridge.toggle">Floating bridge</span></label>
+                <p class="note" id="bridgeInfo"></p>
+                <div class="row">
+                  <button class="btn" type="button" id="bridgeMeasure" data-i18n="bridge.measure" hidden>Measure bridge coupling</button>
+                </div>
+              </div>
             </div>
           </section>
           <p class="sweet-line" id="sweetLine"></p>
@@ -137,6 +163,11 @@
                 <button class="btn" type="button" id="fitMeasure" data-i18n="fit.measure">Measure a guitar</button>
                 <button class="btn btn-quiet" type="button" id="fitDelete" data-i18n="fit.delete">Delete</button>
               </div>
+              <div class="row">
+                <button class="btn btn-quiet" type="button" id="fitExport" data-i18n="fit.export" hidden>Export</button>
+                <button class="btn btn-quiet" type="button" id="fitImport" data-i18n="fit.import">Import</button>
+              </div>
+              <p class="note" id="fitIO" aria-live="polite"></p>
             </div>
             <p class="note" id="fitEmpty" data-i18n="fit.none"></p>
             <p class="note" id="fitMeta"></p>
@@ -204,6 +235,11 @@
               <button class="btn btn-quiet" type="button" data-a4="442">442</button>
               <button class="btn btn-quiet" type="button" data-a4="443">443</button>
             </div>
+            <div class="row">
+              <button class="btn" type="button" id="a4Cal" data-i18n="a4cal.button">Calibrate from a reference note</button>
+              <button class="btn btn-quiet" type="button" id="a4Undo" data-i18n="a4cal.undo" hidden>Undo</button>
+            </div>
+            <p class="note" id="a4CalStatus" aria-live="polite"></p>
           </div>
           <div class="field">
             <label for="globalCents"><span data-i18n="offset.label">Overall offset</span> <output id="globalOut">0.0 ¢</output></label>
@@ -217,6 +253,12 @@
               <button type="button" role="radio" data-tol="2">±2 ¢</button>
               <button type="button" role="radio" data-tol="3">±3 ¢</button>
             </div>
+          </div>
+          <div class="field">
+            <span class="field-label" data-i18n="cue.label">When a string is in tune</span>
+            <label class="toggle"><input type="checkbox" id="cueVibrate"><span data-i18n="cue.vibrate">Vibrate</span></label>
+            <label class="toggle"><input type="checkbox" id="cueSound"><span data-i18n="cue.sound">Play a chime</span></label>
+            <p class="note" data-i18n="cue.note"></p>
           </div>
           <div class="field">
             <label for="gate"><span data-i18n="gate.label">Input threshold</span> <output id="gateOut">−58 dB</output></label>
