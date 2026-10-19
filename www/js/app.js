@@ -483,7 +483,7 @@ function strumLabels() {
 const boardTol = () => Math.max(S.tolerance, 1);
 function boardOpts() {
   return {
-    labels: strumLabels(), tolerance: boardTol(), t, fmtSigned, stringName,
+    labels: strumLabels(), tolerance: boardTol(), liveTolerance: S.tolerance, t, fmtSigned, stringName,
     focus: board ? board.focus : -1, live: board ? board.live : -1,
   };
 }
@@ -528,14 +528,14 @@ function boardStatus() {
   }
   if (board.focus >= 0) return t('board.focused', { string: stringName(board.focus) });
   const read = board.rows.filter((r) => r && (r.state === 'ok' || r.state === 'live'));
-  const ok = read.filter((r) => Math.abs(r.cents) <= tol).length;
+  const ok = read.filter((r) => !needsWork(r, tol, S.tolerance)).length;
   return t('strum.summary', { ok, read: read.length, tol: fmt(tol, tol % 1 ? 1 : 0) });
 }
 
 function boardPlan() {
   const tol = boardTol();
   if (board.guided) return board.finished ? t('board.retune') : '';
-  const todo = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol));
+  const todo = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol, S.tolerance));
   if (!todo.length) return t('board.allGood');
   if (board.focus >= 0) return t('board.retune');
   return `${t('board.order', { list: todo.map((i) => stringShort(i)).join(' → ') })}\n${t('board.retune')}`;
@@ -547,7 +547,7 @@ function renderBoard() {
   const tol = boardTol();
   renderTuneBoard($('#strumRows'), board.rows, boardOpts());
   refreshBoardText();
-  const todo = board.rows.some((r) => needsWork(r, tol));
+  const todo = board.rows.some((r) => needsWork(r, tol, S.tolerance));
   $('#strumGuide').hidden = board.guided || !todo;
   $('#strumStop').hidden = !board.guided || board.finished;
   $('#strumAgain').hidden = false;
@@ -592,7 +592,7 @@ function boardLive(reading, now) {
   if (live >= 0) updateTuneRow(el, live, board.rows[live], o);
   if (changedRow || live >= 0) {
     refreshBoardText();
-    const todo = board.rows.some((r) => needsWork(r, boardTol()));
+    const todo = board.rows.some((r) => needsWork(r, boardTol(), S.tolerance));
     $('#strumGuide').hidden = board.guided || !todo;
     $('#strumAgain').classList.toggle('is-on', !todo || board.finished);
     $('#strumHint').hidden = !board.rows.some((r) => r && (r.state === 'shared' || r.state === 'unsure'));
@@ -644,7 +644,7 @@ function boardRelease() {
 function startGuide() {
   if (!board) return;
   const tol = boardTol();
-  board.queue = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol));
+  board.queue = board.rows.map((_, i) => i).filter((i) => needsWork(board.rows[i], tol, S.tolerance));
   if (!board.queue.length) return;
   board.guided = true;
   board.finished = false;
@@ -689,7 +689,9 @@ function onBoardTap(e) {
 /** Keep the board in step when the user changes the tuner mode or taps the headstock. */
 function syncBoardMode() {
   if (!board || boardBusy) return;
-  board.prev = null; // the user took control of the mode
+  // Leaving locked mode means the user took control; re-locking on another string
+  // (headstock tap during the guide) keeps the mode to restore afterwards.
+  if (S.mode !== 'manual') board.prev = null;
   board.focus = S.mode === 'manual' ? lockedString : -1;
   if (board.guided && S.mode !== 'manual') { board.guided = false; board.finished = false; }
   renderBoard();
@@ -715,6 +717,16 @@ async function startStrumCheck(opts = {}) {
   }
   cancelStrumCheck(false);
   if (board) { stopGuide(); board = null; }
+  // The board compares open strings with their string targets, so it cannot run in
+  // 12th-fret mode (targets an octave up) or chromatic mode (no string targets).
+  if (S.intonation) {
+    S.intonation = false;
+    $('#intonation').checked = false;
+    tracker.reset();
+    tunedTracker.reset();
+    persist();
+  }
+  if (S.mode === 'chromatic') setMode('auto');
   strumFit = fit;
   setStrumTitle();
   strumBusy = true;
@@ -759,7 +771,7 @@ async function startStrumCheck(opts = {}) {
   renderBoard();
   ensurePanelVisible();
   // Fitting a guitar: go straight into the string-by-string guide.
-  if (fit && board.rows.some((r) => needsWork(r, boardTol()))) startGuide();
+  if (fit && board.rows.some((r) => needsWork(r, boardTol(), S.tolerance))) startGuide();
 }
 
 function cancelStrumCheck(hide = true) {

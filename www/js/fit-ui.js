@@ -90,11 +90,17 @@ export const SPREAD_WARN = 1.5;
 
 // ── Tune board (strum check you can tune from) ──────────────────────────
 
+/**
+ * Tolerance for one row: live strobe readings are precise enough for the user's own
+ * tolerance; strum readings (±0.4 ¢) use at least 1 ¢ so they do not flicker in and out.
+ */
+export const rowTolerance = (row, tol, liveTol = tol) => (row && row.state === 'live' ? liveTol : tol);
+
 /** True when a board row still needs work: off by more than the tolerance, or not read reliably. */
-export function needsWork(row, tol) {
+export function needsWork(row, tol, liveTol = tol) {
   if (!row) return true;
   if (row.state === 'shared' || row.state === 'silent' || row.state === 'unsure') return true;
-  return !(Math.abs(row.cents) <= tol);
+  return !(Math.abs(row.cents) <= rowTolerance(row, tol, liveTol));
 }
 
 /**
@@ -102,11 +108,11 @@ export function needsWork(row, tol) {
  * Sizes are bands, not peg angles — the turn per cent depends on the gear ratio,
  * post diameter and string, which the app cannot know.
  */
-export function boardAdvice(row, tol, t) {
+export function boardAdvice(row, tol, t, liveTol = tol) {
   if (!row) return '';
   if (row.state === 'shared' || row.state === 'silent') return t('board.pluck');
   const c = row.cents;
-  if (Math.abs(c) <= tol) return row.state === 'unsure' ? t('board.check') : t('board.ok');
+  if (Math.abs(c) <= rowTolerance(row, tol, liveTol)) return row.state === 'unsure' ? t('board.check') : t('board.ok');
   const a = Math.abs(c);
   const advice = t('board.advice', {
     dir: c > 0 ? t('board.loosen') : t('board.tighten'),
@@ -137,6 +143,11 @@ export function updateTuneRow(el, i, row, o) {
   if (!li) return;
   const btn = li.firstElementChild;
   const dot = li.querySelector('.srow-gauge i');
+  const band = li.querySelector('.srow-gauge b');
+  const tol = rowTolerance(row, o.tolerance, o.liveTolerance ?? o.tolerance);
+  const w = (tol / BOARD_RANGE) * 50;
+  const bandStyle = `left:${50 - w}%;width:${2 * w}%`;
+  if (band.getAttribute('style') !== bandStyle) band.setAttribute('style', bandStyle);
   const valEl = li.querySelector('.srow-val');
   const advEl = li.querySelector('.srow-advice');
   const cls = ['srow', 'srow-tap'];
@@ -145,7 +156,7 @@ export function updateTuneRow(el, i, row, o) {
     const hasValue = row.state === 'ok' || row.state === 'unsure' || row.state === 'live';
     if (hasValue) {
       const c = row.cents;
-      cls.push(Math.abs(c) <= o.tolerance ? 'is-ok' : 'is-off');
+      cls.push(Math.abs(c) <= tol ? 'is-ok' : 'is-off');
       if (row.state === 'unsure') cls.push('is-unsure');
       val = `${row.state === 'unsure' ? '≈ ' : ''}${o.fmtSigned(c, 1)} ¢`;
       const pos = 50 + (Math.max(-BOARD_RANGE, Math.min(BOARD_RANGE, c)) / BOARD_RANGE) * 50;
@@ -164,7 +175,7 @@ export function updateTuneRow(el, i, row, o) {
   const className = cls.join(' ');
   if (li.className !== className) li.className = className;
   if (valEl.textContent !== val) valEl.textContent = val;
-  const advice = row ? boardAdvice(row, o.tolerance, o.t) : '';
+  const advice = row ? boardAdvice(row, o.tolerance, o.t, o.liveTolerance ?? o.tolerance) : '';
   if (advEl.textContent !== advice) advEl.textContent = advice;
   btn.setAttribute('aria-pressed', String(o.focus === i));
   btn.setAttribute('aria-label', o.t('board.rowAria', { string: o.stringName(i), value: val, advice }));

@@ -121,3 +121,14 @@ test('tune board advice: direction, size band, and strings that need a single pl
   assert.equal(needsWork({ state: 'unsure', cents: 0 }, 1), true);
   assert.equal(needsWork({ state: 'silent', cents: null }, 1), true);
 });
+
+test('tune board: live rows use the user tolerance, strum rows at least 1 cent', async () => {
+  const { needsWork, boardAdvice } = await import('../www/js/fit-ui.js');
+  const t = (k) => k;
+  // Tolerance ±0.5 ¢: a strum reading of 0.8 ¢ is fine (strum precision), a live 0.8 ¢ is not yet.
+  assert.equal(needsWork({ state: 'ok', cents: 0.8 }, 1, 0.5), false);
+  assert.equal(needsWork({ state: 'live', cents: 0.8 }, 1, 0.5), true);
+  assert.equal(needsWork({ state: 'live', cents: 0.4 }, 1, 0.5), false);
+  assert.notEqual(boardAdvice({ state: 'live', cents: 0.8 }, 1, t, 0.5), 'board.ok');
+  assert.equal(boardAdvice({ state: 'live', cents: 0.4 }, 1, t, 0.5), 'board.ok');
+});
