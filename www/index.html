@@ -38,6 +38,8 @@
           <svg viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/><circle cx="8" cy="6" r="1.6"/><circle cx="15" cy="10" r="1.6"/><circle cx="10" cy="14" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg><span data-i18n="tab.tunings">Tunings</span></button>
         <button type="button" data-tab="sweeten">
           <svg viewBox="0 0 24 24"><path d="M5 20V9M10 20V5M15 20v-8M20 20V7"/><path d="M3 20h18"/></svg><span data-i18n="tab.sweeten">Sweeten</span></button>
+        <button type="button" data-tab="check">
+          <svg viewBox="0 0 24 24"><rect x="5.5" y="4.5" width="13" height="16.5" rx="2"/><path d="M9.5 4.5V3h5v1.5M9 13.2l2.2 2.2 4-4.4"/></svg><span data-i18n="tab.check">Check-up</span></button>
         <button type="button" data-tab="learn">
           <svg viewBox="0 0 24 24"><path d="M4 5h6a3 3 0 0 1 3 3v12a2.5 2.5 0 0 0-2.5-2.5H4zM20 5h-6a3 3 0 0 0-3 3"/><path d="M20 5v12.5h-6.5A2.5 2.5 0 0 0 11 20"/></svg><span data-i18n="tab.learn">Learn</span></button>
         <button type="button" data-tab="settings">
@@ -237,6 +239,10 @@
       </section>
 
       <!-- Learn -->
+      <section class="view view-check" data-view-name="check" aria-label="Guitar check-up" data-i18n-aria="check.aria" hidden>
+        <div class="page" id="checkPage"></div>
+      </section>
+
       <section class="view view-learn" data-view-name="learn" aria-label="Learn" data-i18n-aria="learn.aria" hidden>
         <div class="page prose" id="learn"></div>
       </section>

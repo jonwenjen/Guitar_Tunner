@@ -157,6 +157,79 @@ export const REFERENCES = {
     cite: 'DR Rare Phosphor Bronze RPL-10, RPML-11, RPM-12: gauges (zZounds product specifications).',
     url: 'https://www.zzounds.com/item--DRSRPML11?siid=31477',
   },
+  // Guitar check-up: setup standards and the built-in guitars.
+  taylorDry: {
+    cite: 'Taylor Guitars. Symptoms of a dry guitar (keep 45–55 % relative humidity; low action, sunken top, sharp fret ends, hump at the neck joint, neck plane above the bridge).',
+    url: 'https://www.taylorguitars.com/support/maintenance/symptoms-dry-guitar',
+  },
+  taylorWet: {
+    cite: 'Taylor Guitars. Symptoms of a wet guitar (high action, swollen top, dull sound; some belly behind the bridge is normal).',
+    url: 'https://jp.taylorguitars.com/support/maintenance/symptoms-wet-guitar',
+  },
+  stewmacRelief: {
+    cite: 'StewMac. How to measure neck relief (acoustic starting point 0.15–0.30 mm; truss rod in 1/8–1/16-turn steps).',
+    url: 'https://www.stewmac.com/video-and-ideas/online-resources/neck-building-and-repair-and-setup/neck-relief-gauge-instructions/',
+  },
+  martinSC13E: {
+    cite: 'C. F. Martin & Co. SC-13E set-up and adjustment (relief, 12th-fret action, saddle height, neck-angle plates).',
+    url: 'https://www.martinguitar.com/on/demandware.static/-/Library-Sites-MartinSharedLibrary/default/pdf/sc13e-setup-adjustment.pdf',
+  },
+  martinAction: {
+    cite: 'One Man’s Guitar (2014, rev. 2017). Martin guitar string height specs: 12th fret bass 2.38–2.78 mm, treble 1.59–1.98 mm.',
+    url: 'https://onemanz.com/guitar/martin-guitar-string-height',
+  },
+  musicnomadNut: {
+    cite: 'MusicNomad. The complete guide to guitar nut height (0.50 mm bass to 0.40 mm treble above the 1st fret).',
+    url: 'https://musicnomadcare.com/guides/the-complete-guide-to-guitar-nut-height/',
+  },
+  hazeSaddle: {
+    cite: 'Haze Guitars. Acoustic guitar action: geometry class, and how to lower a guitar saddle (saddle moves twice the 12th-fret change; relief and nut first).',
+    url: 'https://hazeguitars.com/blog/acoustic-guitar-action-geometry-class',
+  },
+  joesReset: {
+    cite: 'Joe’s Vintage Guitars. How to tell if your acoustic guitar needs a neck reset (straightedge test; saddle 2.5–4 mm proud of the bridge).',
+    url: 'https://www.joesvintageguitarsaz.com/post/how-to-tell-if-your-acoustic-guitar-needs-a-neck-reset/',
+  },
+  keith2022: {
+    cite: 'Keith, M. (2022). How to fix problems caused by incorrect neck angles on acoustic guitars. Acoustic Guitar, Ask the Expert.',
+    url: 'https://acousticguitar.com/how-to-fix-neck-angles-on-guitars/',
+  },
+  fordBridge: {
+    cite: 'Ford, F. Loose bridge. Frets.com (a slip of paper under the back edge of the bridge).',
+    url: 'https://mail.frets.com/FretsPages/Luthier/Technique/Guitar/Bridges/ReglueBr/LooseBridge/loosebridge.html',
+  },
+  truetoneGM1CSS: {
+    cite: 'Supply Music. Truetone GM-1CSS: all-solid spruce and mahogany (the brand’s CSS suffix). GC-8CSS specifications are not published.',
+    url: 'https://supplymusic1.com/product-tag/gm-1css/',
+  },
+  truetoneGM1C: {
+    cite: 'Listen Musical. Truetone GM-1C: solid spruce top, mahogany, ebony bridge, GA cutaway body.',
+    url: 'https://www.listenmusical.com/products/truetone-gm-1c-acoustic-guitar',
+  },
+  stanfordPSOM20: {
+    cite: 'WorthPoint listing, Stanford Performer PSOM20: solid Sitka spruce, solid rosewood, mahogany neck, ebony fingerboard and bridge, bone nut and saddle, scalloped forward-shifted X bracing (2006–2008).',
+    url: 'https://www.worthpoint.com/worthopedia/stanford-performer-psom20-guitar-612124748',
+  },
+  stanfordPSRD20: {
+    cite: 'WorthPoint listing, Stanford Performer PSRD20: 45 mm nut, about 2.5 mm action at the 12th fret.',
+    url: 'https://www.worthpoint.com/worthopedia/stanford-performer-psrd-20-all-solid-309191337',
+  },
+  stanfordOrigin: {
+    cite: 'MusicRadar (2008). Stanford Guitars MSGC100 review: the 2007 Performer line is made in China.',
+    url: 'https://musicradar.com/reviews/guitars/stanford-guitars-msgc100-150178',
+  },
+  yamahaAPX4aBentley: {
+    cite: 'Bentley’s Guitar Shop listing, Yamaha APX-4A: 634 mm scale, 43 mm nut, thinline cutaway, solid Sitka spruce top, nato, under-saddle piezo with 3-band EQ.',
+    url: 'https://www.bentleyguitars.com/shop/c/p/Yamaha-used-APX-4A-Thinline-AcousElect-Cutaway-whard-case-x101403427.htm',
+  },
+  yamahaAPX4aCME: {
+    cite: 'Chicago Music Exchange listing, Yamaha APX-4A (1997): spruce, mahogany, truss rod at the headstock, 12″ fingerboard radius, built-in preamp.',
+    url: 'https://www.chicagomusicexchange.com/products/yamaha-apx-4a-natural-1997-1635054',
+  },
+  yamahaAPX: {
+    cite: 'Yamaha. APX series specifications (634 mm scale and 43 mm nut on the current APX600).',
+    url: 'https://usa.yamaha.com/products/musical_instruments/guitars_basses/ac_guitars/apx/specs.html',
+  },
   petersonSC5000: {
     cite: 'Peterson Electro-Musical Products. Strobe Center 5000-II product page and SC-5000 instruction manual.',
     url: 'https://www.petersontuners.com/products/sc5000',

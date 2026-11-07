@@ -22,6 +22,8 @@ export const DEFAULTS = {
   cueSound: true,             // chime when a string becomes tuned
   stringSetups: {},           // per guitar id (or 'default'): strings on, strings set up for, action, scale
   stringsKey: 'default',      // which guitar the Strings section shows
+  checks: [],                 // guitar check-ups (health-ui.js)
+  checkId: null,
   temperamentId: 'equal',
   temperamentRoot: 0,
   a4: 440,

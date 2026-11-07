@@ -19,7 +19,8 @@ import { shareFile, pickTextFile, stamp } from './share-file.js';
 import { TunedCue } from './feedback.js';
 import { estimateBridge, planBridge, responseMatrix } from './bridge.js';
 import { loadSettings, saveSettings, DEFAULTS } from './store.js';
-import { renderStrings, bindStrings, getSetup, setSetup, setOptionsHtml, selValue, selFromValue, sanitizeSel, sanitizeSetup } from './strings-ui.js';
+import { renderStrings, bindStrings, getSetup, setSetup, setOptionsHtml, selValue, selFromValue, sanitizeSel, sanitizeSetup, stringsSummary } from './strings-ui.js';
+import { renderCheck, bindCheck, cleanCheck } from './health-ui.js';
 import { parseNote, octaveOf, cents as centsOf, freqToMidi, noteLabel as noteLabelIntl } from './music.js';
 import {
   LANGUAGES, setLanguage, detectLanguage, htmlLang, currentLanguage, listSep, t, tp, term, fmt, fmtSigned,
@@ -1148,7 +1149,7 @@ function finishA4Cal(c) {
 async function exportGuitars() {
   if (!S.guitars.length) return;
   const stringSetups = Object.fromEntries(S.guitars.filter((g) => (S.stringSetups || {})[g.id]).map((g) => [g.id, S.stringSetups[g.id]]));
-  const data = { app: 'strobe-tuner', type: 'guitar-profiles', version: 1, exported: new Date().toISOString(), guitars: S.guitars, bridge: S.bridge || null, stringSetups };
+  const data = { app: 'strobe-tuner', type: 'guitar-profiles', version: 1, exported: new Date().toISOString(), guitars: S.guitars, bridge: S.bridge || null, stringSetups, checks: S.checks };
   const how = await shareFile(JSON.stringify(data, null, 1), `guitars-${stamp()}.json`, 'application/json', { title: t('fit.exportTitle') });
   $('#fitIO').textContent = how === 'cancelled' ? '' : t('fit.exported', { n: S.guitars.length });
 }
@@ -1186,6 +1187,7 @@ async function importGuitars() {
   try { data = JSON.parse(text); } catch { $('#fitIO').textContent = t('fit.importBad'); return; }
   const list = Array.isArray(data) ? data : (data && Array.isArray(data.guitars) ? data.guitars : [data]);
   let added = 0, last = null;
+  const idMap = {};
   for (const raw of list) {
     const g = cleanProfile(raw);
     if (!g) continue;
@@ -1193,19 +1195,32 @@ async function importGuitars() {
     const same = S.guitars.find((x) => x.id === g.id);
     if (same && same.name === g.name && same.created === g.created) { last = same.id; continue; } // already here
     if (same) g.id = `g${Date.now().toString(36)}${added}`;
+    idMap[fileId] = g.id;
     S.guitars.push(g);
     const setup = data && data.stringSetups && typeof data.stringSetups === 'object' ? data.stringSetups[fileId] : null;
     setSetup(S, g.id, setup ? sanitizeSetup(setup) : { current: g.stringSet, scaleMm: g.scaleMm });
     last = g.id;
     added++;
   }
+  // Check-ups travel with the guitars; ones already here are kept as they are.
+  let checksAdded = 0;
+  if (data && Array.isArray(data.checks)) {
+    for (const raw of data.checks) {
+      const c = cleanCheck(raw);
+      if (!c || S.checks.some((x) => x.id === c.id)) continue;
+      if (c.profileId && idMap[c.profileId]) c.profileId = idMap[c.profileId];
+      S.checks.push(c);
+      checksAdded++;
+    }
+  }
   const bq = data && data.bridge && Array.isArray(data.bridge.q) && data.bridge.q.length === 6 && data.bridge.q.every(Number.isFinite) ? data.bridge : null;
   if (bq && !S.bridge) S.bridge = { q: bq.q.slice(), date: String(bq.date || ''), dj: finiteOr0(bq.dj), drop10: finiteOr0(bq.drop10) };
-  if (!last) { $('#fitIO').textContent = t('fit.importBad'); return; }
+  if (checksAdded) renderCheck(checkCtx);
+  if (!last) { persist(); $('#fitIO').textContent = checksAdded ? t('fit.imported', { n: checksAdded }) : t('fit.importBad'); return; }
   S.guitarId = last;
   S.stringsKey = last;
   S.sweetenerId = 'guitar-fit';
-  persist(); recompute(); renderHeader(); renderSweeten();
+  persist(); recompute(); renderHeader(); renderSweeten(); renderCheck(checkCtx);
   $('#fitIO').textContent = added ? t('fit.imported', { n: added }) : t('fit.importSame');
 }
 
@@ -1243,7 +1258,7 @@ function startWizard() {
       S.stringsKey = profile.id;
       S.sweetenerId = 'guitar-fit';
       if (typeof goal === 'number') S.sweetness = goal;
-      persist(); recompute(); renderHeader(); renderSweeten();
+      persist(); recompute(); renderHeader(); renderSweeten(); renderCheck(checkCtx);
       $('#sweetNote').textContent = t('wiz.saved');
     },
     onTune: tuneToGuitar,
@@ -1306,8 +1321,9 @@ function bindFit() {
   $('#fitDelete').addEventListener('click', () => {
     S.guitars = S.guitars.filter((g) => g.id !== S.guitarId);
     if (S.stringSetups) delete S.stringSetups[S.guitarId];
+    for (const c of S.checks) if (c.profileId === S.guitarId) c.profileId = null;
     S.guitarId = S.guitars.length ? S.guitars[S.guitars.length - 1].id : null;
-    persist(); recompute(); renderHeader(); renderSweeten();
+    persist(); recompute(); renderHeader(); renderSweeten(); renderCheck(checkCtx);
   });
 }
 
@@ -1339,6 +1355,21 @@ function wizardStrings() {
     toSel: (v) => (v === 'custom' ? custom || { kind: 'unknown' } : selFromValue(v)),
   };
 }
+
+// ── Check-up ───────────────────────────────────────────────────────────
+const checkCtx = {
+  get S() { return S; },
+  t, fmt, fmtSigned, stringShort, listSep,
+  persist: () => persist(),
+  guitars: () => S.guitars,
+  stringsFor: (profileId) => {
+    const key = profileId && S.guitars.some((g) => g.id === profileId) ? profileId : 'default';
+    const prof = S.guitars.find((g) => g.id === key);
+    return stringsSummary(S, key, prof ? prof.notes : currentTuning().notes, S.a4, prof ? prof.scaleMm : null);
+  },
+  a4: () => S.a4,
+  goMeasure: () => startWizard(),
+};
 
 // ── Static text ────────────────────────────────────────────────────────
 /** Fill every element marked with data-i18n* attributes. */
@@ -1662,7 +1693,7 @@ function bindSettings() {
   $('#flats').addEventListener('change', (e) => { S.flats = e.target.checked; afterSetting(); renderAll(); });
   $('#keepAwake').addEventListener('change', (e) => { S.keepAwake = e.target.checked; afterSetting(); if (S.keepAwake && mic.running) requestWakeLock(); else releaseWakeLock(); });
   $('#resetAll').addEventListener('click', async () => {
-    const keep = { customTunings: S.customTunings, lang: S.lang, terms: S.terms, guitars: S.guitars, guitarId: S.guitarId, stringSetups: S.stringSetups, stringsKey: S.stringsKey };
+    const keep = { customTunings: S.customTunings, lang: S.lang, terms: S.terms, guitars: S.guitars, guitarId: S.guitarId, stringSetups: S.stringSetups, stringsKey: S.stringsKey, checks: S.checks, checkId: S.checkId };
     S = { ...structuredClone(DEFAULTS), ...keep };
     persist(); recompute(); applyTheme(); renderAll();
   });
@@ -1691,6 +1722,7 @@ function renderAll() {
   renderCustomBuilder();
   renderSweeten();
   renderSettings();
+  renderCheck(checkCtx);
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────
@@ -1714,6 +1746,7 @@ async function boot() {
   bindSettings();
   bindFit();
   bindStrings(stringsCtx, (o) => renderStrings(stringsCtx, o));
+  bindCheck(checkCtx);
   $$('[data-tab]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.tab)));
   $$('[data-goto]').forEach((b) => b.addEventListener('click', () => showView(b.dataset.goto)));
   $('#hub').classList.add('is-idle');

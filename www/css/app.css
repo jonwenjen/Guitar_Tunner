@@ -133,7 +133,7 @@ button { cursor: pointer; }
 
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(6, 1fr);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--wood-2) 94%, transparent);
@@ -147,6 +147,8 @@ button { cursor: pointer; }
 }
 .tabs button span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html:lang(ja) .tabs button, html:lang(ko) .tabs button, html:lang(zh-Hant-TW) .tabs button { font-size: 0.7rem; letter-spacing: -0.02em; }
+html:lang(de) .tabs button, html:lang(es) .tabs button { font-size: 0.66rem; letter-spacing: -0.02em; }
+html:lang(ja) .tabs button { font-size: 0.6rem; letter-spacing: -0.04em; }
 .tabs svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tabs button[aria-current='page'] { color: var(--ink); }
 .tabs button[aria-current='page'] svg { stroke: var(--brass); }
@@ -618,4 +620,43 @@ html[data-theme='daylight'] .board-focus.is-off .bf-advice { color: #b0470c; }
 .str-recs li span.str-brands { color: var(--ink); }
 @media (max-width: 380px) {
   .str-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Check-up tab */
+:root { --hc-red: #ef6b52; --hc-amber: #e6a647; --hc-green: #7cc77f; }
+html[data-theme='daylight'] { --hc-red: #b3362a; --hc-amber: #9a5d12; --hc-green: #2f7d3b; }
+.btn-small { min-height: 32px; padding: 4px 12px; font-size: 0.84rem; }
+.hc-pick { gap: 8px; }
+.hc-specs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; max-width: 560px; }
+.hc-spec, .hc-in { display: grid; gap: 4px; font-size: 0.88rem; min-width: 0; }
+.hc-spec > span, .hc-in > span:first-child { color: var(--ink-dim); }
+.page .hc-spec select, .page .hc-spec input, .page .hc-in select { width: 100%; min-width: 0; }
+.hc-src a { color: var(--brass); }
+.hc-group { border: 1px solid var(--rule); border-radius: 12px; padding: 10px 14px 14px; margin: 14px 0; max-width: 620px; }
+.hc-group legend { font-weight: 600; padding: 0 6px; }
+.hc-group > .note { margin-top: 0; }
+.hc-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hc-num { display: flex; align-items: center; gap: 6px; }
+.page .hc-num input { flex: 1 1 auto; min-width: 0; }
+.hc-num .unit { color: var(--ink-dim); font-size: 0.84rem; flex: none; }
+.hc-in input[aria-invalid='true'] { outline: 2px solid var(--hc-red); }
+.hc-buzz { grid-column: 1 / -1; border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.9rem; }
+.hc-buzz legend { color: var(--ink-dim); font-size: 0.88rem; padding: 0; margin-bottom: 4px; width: 100%; }
+.hc-buzz label { display: flex; align-items: center; gap: 6px; }
+.hc-summary { margin: 8px 0 4px; }
+.hc-verdict { font-weight: 600; margin: 4px 0 8px; }
+.hc-count { font-size: 0.8rem; border: 1px solid var(--rule); border-radius: 999px; padding: 2px 10px; }
+.hc-results { list-style: none; margin: 8px 0; padding: 0; max-width: 680px; }
+.hc-f { padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.hc-f .hc-chip { display: inline-block; font-size: 0.74rem; font-weight: 600; border-radius: 999px; padding: 1px 8px; border: 1px solid currentColor; white-space: nowrap; margin-right: 8px; vertical-align: 1px; }
+.hc-f b { font-weight: 600; }
+.hc-f .hc-text { display: block; margin-top: 4px; color: var(--ink); font-size: 0.92rem; line-height: 1.5; }
+.hc-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.is-luthier .hc-chip, .hc-count.is-luthier, .hc-verdict.is-luthier { color: var(--hc-red); }
+.is-tech .hc-chip, .hc-count.is-tech, .hc-verdict.is-tech { color: var(--hc-amber); }
+.is-diy .hc-chip, .hc-count.is-diy, .hc-verdict.is-diy { color: var(--brass); }
+.is-watch .hc-chip, .is-info .hc-chip, .is-need .hc-chip, .hc-count.is-watch, .hc-verdict.is-watch, .hc-verdict.is-need { color: var(--ink-dim); }
+.is-ok .hc-chip, .hc-count.is-ok, .hc-verdict.is-ok { color: var(--hc-green); }
+@media (max-width: 380px) {
+  .hc-fields, .hc-specs { grid-template-columns: minmax(0, 1fr); }
 }

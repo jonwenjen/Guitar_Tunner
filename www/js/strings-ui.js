@@ -300,3 +300,23 @@ export function bindStrings(ctx, rerender) {
     if (b) update({ unit: b.dataset.unit });
   });
 }
+
+/**
+ * The strings on a guitar for other sections (check-up): what is on it, what it was set
+ * up for, and the total tension difference in the tuning played.
+ */
+export function stringsSummary(S, key, notes, a4 = 440, scaleMm = null) {
+  const setup = getSetup(S, key);
+  const cur = resolveSet(setup.current);
+  const dsn = resolveSet(setup.design);
+  if (!cur) return null;
+  let dTotal = null;
+  if (dsn) {
+    const L = scaleMm || setup.scaleMm;
+    const freqs = notes.map((n) => midiToFreq(parseNote(n), a4));
+    const refFreqs = STANDARD.map((n) => midiToFreq(parseNote(n), a4));
+    const action = [0, 1, 2, 3, 4, 5].map((i) => actionFor(i, setup.actionBass, setup.actionTreble));
+    dTotal = compareSets(cur, dsn, { freqs, refFreqs, scaleMm: L, action }).dTotal;
+  }
+  return { current: setup.current, design: setup.design, dTotal, label: cur.label };
+}

@@ -50,6 +50,29 @@ export const ARTICLES = [
       'If the fretted note is sharp, the vibrating length is too short: move that string’s saddle away from the neck. If it is flat, move the saddle toward the neck. Retune the open string and repeat until both read still.',
     ],
   },
+  {
+    id: 'design',
+    title: 'How a steel-string guitar holds its shape',
+    body: [
+      'Six steel strings pull on a guitar with roughly 70 kg in total (a set of 12-53 lights in standard tuning — see Sweeten → Strings). The neck resists that pull with a truss rod, the top resists it with braces and a hardwood bridge plate under the bridge, and the joint between them sets the neck angle. Every playing property — action, buzz, intonation — follows from how these parts sit, and all of them move slowly with string tension, humidity and age.',
+      'Relief. A neck under string tension bows forward a little. A small, even bow — 0.15 to 0.30 mm at the 7th–8th fret on an acoustic (StewMac) — gives a vibrating string room to swing without touching the frets in the middle of the neck. The truss rod sets it: tightening straightens the neck, loosening lets it bow. It adjusts relief, not action, although the action follows.',
+      'Nut and saddle. The strings rest on the nut at one end and the saddle at the other. The nut sets the action at the first frets: a slot cut too high makes the first frets hard to press and sharp, too low makes the open string buzz (MusicNomad gives 0.50 mm above the 1st fret on the bass side and 0.40 mm on the treble). The saddle sets the action higher up: because the 12th fret is halfway, the saddle must move twice as far as the action at the 12th fret (Haze Guitars). The saddle also sits a few millimetres behind the theoretical scale length — the compensation that cancels the sharpening caused by pressing a string to a fret (Varieschi & Gower 2010).',
+      'Neck angle. The neck is set at a slight angle so that the plane of the fret tops meets the top of the bridge, which leaves room for a saddle standing about 2.5–4 mm proud (Keith 2022; Joe’s Vintage Guitars). Over decades the string pull rotates the neck forward and bulges the top behind the bridge: the fret plane drops below the bridge top, the action rises and the saddle runs out of height. The fix is a neck reset — the luthier removes the neck and recuts the heel. Glued necks are steamed off; bolt-on necks are simpler.',
+      'Humidity. Wood swells and shrinks with moisture, mostly across the grain. Taylor Guitars recommends keeping guitars at 45–55 % relative humidity. A dry guitar shows low action, a top sunk between bridge and soundhole, fret ends sticking out of a shrunken fingerboard, a hump where the neck meets the body and a fret plane above the bridge; a wet one shows high action, a swollen top and a dull sound. Solid wood moves more than laminate, so solid-top and all-solid guitars need the closest care.',
+    ],
+  },
+  {
+    id: 'checkup',
+    title: 'How the check-up works',
+    body: [
+      'The check-up follows the order in which a technician sets up a guitar, because each step changes the next (Haze Guitars): first the guitar at normal humidity with settled strings, then the relief, then the nut, then the saddle height, and only then the intonation. A finding further down the list is provisional until those above it are fixed — the app says so when, for example, the relief is out of range and the action is high.',
+      'From each measurement the app works out what to change. Relief outside the target gives a truss-rod direction in 1/8-turn steps (StewMac). Action above the target gives the amount to take off the bottom of the saddle — twice the change at the 12th fret — and how much saddle would remain. Nut height above the target gives the depth to file. The action targets follow Martin’s factory range at the 12th fret (2.38–2.78 mm bass, 1.59–1.98 mm treble), shifted down for a light touch or up for hard strumming and slide.',
+      'The strobe measurement adds what a ruler cannot see. Its 12th-fret error per string tells how far each string’s break point on the saddle should move (1731/L cents per millimetre). Because higher action stretches a fretted string more, the app first predicts how the planned action change moves that error — about 0.6 ¢ per 0.1 mm on the 6th string with light strings — and gives saddle compensation only for what remains. More than about 1 mm is beyond what reshaping a 3 mm saddle can do and calls for a compensated saddle or a recut slot. Extra sharpness at the first frets points at the nut.',
+      'A neck reset is the decision with the most at stake, so the app proposes it only when three things agree: the action is too high, a straightedge on the frets hits the front of the bridge below its top, and lowering the saddle enough would leave less than about 2.5 mm above the bridge. With only some of these it says what to check next. Shaving the bridge is a cheaper alternative some shops offer, at the cost of a weaker bridge and less string drive on the top (Keith 2022); on a laminate guitar a reset can cost more than the instrument.',
+      'Some findings always go to a luthier: a bridge lifting at its back edge (a slip of paper slides under it — Ford), cracks, a truss rod with no adjustment left, and a pronounced belly with high action. The check-up cannot see inside the guitar or judge glue joints, so treat it as preparation for a visit: it tells you what to ask, and lets you see whether an adjustment worked.',
+      'The three built-in guitars start from published data where it exists. The Yamaha APX-4A is a thinline cutaway with a 634 mm scale, an under-saddle piezo pickup and the truss rod at the headstock. The Stanford Performer PSOM-20 is an all-solid OM (Sitka spruce, rosewood, ebony, bone nut and saddle, scalloped forward-shifted X bracing) from the Chinese-made Performer line. Truetone does not publish the GC-8CSS specs, so it starts from typical grand-concert values. Values no source confirms are marked with an asterisk: measure them and correct them.',
+    ],
+  },
 ];
 
 export const LEARN_REFS = [
@@ -61,4 +84,8 @@ export const LEARN_REFS = [
   // String catalog (Sweeten → Strings): where each set's gauges and the tension check came from.
   'stringsDaddarioEJ16', 'stringsDaddarioEJ11', 'stringsDaddario', 'stringsDaddarioEZ', 'stringsElixir', 'stringsElixir8020',
   'stringsMartin', 'stringsErnieBall', 'stringsGibson', 'stringsDR',
+  // Guitar check-up: setup standards and the built-in guitars.
+  'taylorDry', 'taylorWet', 'stewmacRelief', 'martinSC13E', 'martinAction', 'musicnomadNut', 'hazeSaddle', 'joesReset',
+  'keith2022', 'fordBridge', 'yamahaAPX4aBentley', 'yamahaAPX4aCME', 'yamahaAPX', 'stanfordPSOM20', 'stanfordPSRD20',
+  'stanfordOrigin', 'truetoneGM1CSS', 'truetoneGM1C',
 ];
