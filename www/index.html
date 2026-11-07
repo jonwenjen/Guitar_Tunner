@@ -188,6 +188,40 @@
           </div>
           <div class="custom-offsets" id="customOffsets" hidden></div>
 
+          <section class="strings-section" id="stringsSection" aria-labelledby="strTitle">
+            <h2 id="strTitle" data-i18n="str.title">Strings</h2>
+            <p class="lede" data-i18n="str.lede">Pick the strings on the guitar and the gauge it was set up for. Strings that are heavier or lighter than the setup change the tension, the neck relief and the action — and with them the intonation.</p>
+            <div class="field" id="strForField" hidden>
+              <label for="strForSel" data-i18n="str.for">Guitar</label>
+              <select id="strForSel"></select>
+            </div>
+            <div class="field">
+              <label for="strCur" data-i18n="str.current">Strings on the guitar now</label>
+              <select id="strCur"></select>
+              <div class="str-custom" id="strCurCustom" hidden></div>
+            </div>
+            <div class="field">
+              <label for="strDesign" data-i18n="str.design">Set up for (factory or last setup)</label>
+              <select id="strDesign"></select>
+              <p class="note" data-i18n="str.designHint">Most acoustic guitars leave the factory with lights (12–53). The maker's site or the label inside usually says which.</p>
+              <div class="str-custom" id="strDesignCustom" hidden></div>
+            </div>
+            <div class="field" id="strScaleField">
+              <label for="strScale" data-i18n="str.scale">Scale length</label>
+              <select id="strScale"></select>
+            </div>
+            <div class="field">
+              <span class="field-label" data-i18n="str.action">String height at the 12th fret (mm)</span>
+              <div class="row str-action">
+                <label><span data-i18n="str.actionBass">6th string</span> <input type="number" id="strActionBass" min="0.8" max="5" step="0.1" inputmode="decimal"></label>
+                <label><span data-i18n="str.actionTreble">1st string</span> <input type="number" id="strActionTreble" min="0.8" max="5" step="0.1" inputmode="decimal"></label>
+              </div>
+            </div>
+            <div id="strTable"></div>
+            <div class="str-summary" id="strSummary" aria-live="polite"></div>
+            <div id="strRec"></div>
+          </section>
+
           <h2 data-i18n="temper.title">Temperament</h2>
           <p class="lede" data-i18n="temper.lede">Historical temperaments from the Strobe Center 5000-II set. They shift each note by pitch class, in chromatic mode and on the strings.</p>
           <div class="field">

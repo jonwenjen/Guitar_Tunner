@@ -191,7 +191,8 @@ export function updateTuneRow(el, i, row, o) {
  *   t, fmt, fmtSigned, stringName, stringShort, stringNote(i, fret), tuning(), tuningLabel(),
  *   openTargets() → first-partial freq per string (no capo, no sweetener),
  *   ensureMic() → Promise<boolean>, sampleRate(), addBlockListener(fn),
- *   goal(), existingNames(), onSave(profile, goal), onTune(), onClose()
+ *   goal(), existingNames(), onSave(profile, goal), onTune(), onClose(),
+ *   strings: { initial, options(value) → <option>s html, toSel(value) } (optional: which strings are on)
  */
 export function openWizard(ctx) {
   const dlg = document.getElementById('wizard');
@@ -211,6 +212,7 @@ export function openWizard(ctx) {
     runs: {},      // per step: every analysed strum, combined by median
     clips: {},     // per step: the audio of each strum, for exporting
     takes: 5,      // strums per step
+    strings: ctx.strings ? ctx.strings.initial : null,
     session: null,
   };
   let n = 1;
@@ -252,7 +254,7 @@ export function openWizard(ctx) {
   }
 
   function renderIntro() {
-    const inches = { 610: [24, 0], 628: [24.75, 2], 635: [25, 0], 648: [25.5, 1], 650: [25.6, 1] };
+    const inches = { 610: [24, 0], 628: [24.75, 2], 635: [25, 0], 645: [25.4, 1], 648: [25.5, 1], 650: [25.6, 1] };
     const presets = SCALE_PRESETS.map((mm) => {
       const [inch, d] = inches[mm] || [mm / 25.4, 1];
       return `<option value="${mm}" ${mm === state.scale ? 'selected' : ''}>${mm} mm (${ctx.fmt(inch, d)}″)</option>`;
@@ -277,7 +279,12 @@ export function openWizard(ctx) {
         <label for="wizTakes">${esc(t('wiz.takesLabel'))}</label>
         <select id="wizTakes">${[3, 5, 7].map((v) => `<option value="${v}" ${v === state.takes ? 'selected' : ''}>${v}</option>`).join('')}</select>
         <p class="note">${esc(t('wiz.takesHint'))}</p>
-      </div>`;
+      </div>${ctx.strings ? `
+      <div class="field">
+        <label for="wizStrings">${esc(t('wiz.strings'))}</label>
+        <select id="wizStrings">${ctx.strings.options(state.strings)}</select>
+        <p class="note">${esc(t('wiz.stringsHint'))}</p>
+      </div>` : ''}`;
     foot.innerHTML = button('wizCancel', t('wiz.cancel'), 'btn btn-quiet') + button('wizStart', t('wiz.start'), 'btn is-on');
     const sel = body.querySelector('#wizScale');
     const mm = body.querySelector('#wizScaleMm');
@@ -289,6 +296,7 @@ export function openWizard(ctx) {
     mm.addEventListener('input', () => { state.scale = Math.max(400, Math.min(1000, Number(mm.value) || 648)); });
     body.querySelector('#wizName').addEventListener('input', (e) => { state.name = e.target.value.trim() || base; });
     body.querySelector('#wizTakes').addEventListener('change', (e) => { state.takes = Number(e.target.value) || 5; });
+    body.querySelector('#wizStrings')?.addEventListener('change', (e) => { state.strings = e.target.value; });
     foot.querySelector('#wizCancel').addEventListener('click', close);
     foot.querySelector('#wizStart').addEventListener('click', async () => {
       if (!(await ctx.ensureMic())) return;
@@ -392,6 +400,7 @@ export function openWizard(ctx) {
     const profile = makeProfile({
       name: state.name, scaleMm: state.scale, notes: state.notes, open: state.open, frets: state.frets, targets: state.targets,
     });
+    if (ctx.strings) profile.stringSet = ctx.strings.toSel(state.strings);
     let goal = Math.max(0, Math.min(1, ctx.goal()));
     const offsetsHtml = () => {
       const offsets = optimizeOffsets({ notes: state.notes, tuning: ctx.tuning(), profile, goal });

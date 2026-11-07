@@ -17,6 +17,7 @@ A true-strobe guitar tuner for the web, Android and iOS, modelled on the feature
 - **Capo check.** With a capo set, one strum shows how far the capo pulls each string sharp, with advice to reseat it or retune with it on.
 - **Tuning by feel.** A large display of the string being tuned, a vibration and a soft chime when it is in tune (Settings), and an optional median of three strums per check.
 - **Reference calibration.** Play one long note on a piano or keyboard and A4 is set to match it (undo available).
+- **Strings and gauge advice.** Pick the strings on the guitar and the set it was set up for from 30 acoustic sets (D'Addario, Elixir, Martin, Ernie Ball, Gibson, DR — 10s to 13s in phosphor bronze, 80/20 and 85/15), or type any gauges in inches, thousandths or millimetres. The app shows each string's tension in the tuning you play, how far the strings are from the setup's tension, what that does to the neck and the 12th-fret intonation (per 0.1 mm of action), and suggests sets — and single strings — that keep the setup's tension in an altered tuning. With a measured guitar it tells whether a 12th-fret error comes from the strings or from the saddle and action, warns when the strings changed since measuring, and, if you don't know the strings, estimates the plain strings' gauge from their measured stiffness.
 - **Diagnostics and sharing.** Export any strum check or measurement as a WAV with the app's readings embedded, and export or import measured guitars as a file (web ↔ app, phone ↔ phone).
 - **Sweetened tunings.** Just-chord sweetener for open and modal tunings, a least-squares open-chord fit for standard shapes, a measured strobe-style "GTR" preset, and fully custom open-string plus 12th-fret offsets (the Buzz Feiten structure). A sweetness control sets how far each moves from equal temperament.
 - **Temperaments.** Equal, Pythagorean, just major, ¼-comma meantone, Werckmeister III, Kirnberger III, Young II and Kellner in any key — the Strobe Center 5000-II set, computed from their definitions.
@@ -88,6 +89,8 @@ www/                 the app (plain ES modules, no build step)
   js/guitar-fit.js     fretting-error model, saddle advice, per-guitar offset optimiser
   js/fit-ui.js         strum check rows and the "Measure a guitar" wizard
   js/bridge.js         floating-bridge coupling model and one-pass tuning plan
+  js/strings.js        string catalog, tension, stiffness and saddle-setback physics, set suggestions
+  js/strings-ui.js     the Strings section (current and setup strings, tension table, advice)
   js/wav.js            WAV export with the readings embedded (LIST/INFO comment)
   js/share-file.js     share sheet / download / file import
   js/feedback.js       vibration and chime when a string is in tune

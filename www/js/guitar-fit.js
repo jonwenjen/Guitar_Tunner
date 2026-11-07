@@ -22,7 +22,7 @@ import { partialProfile, DEFAULT_B } from './poly.js';
 export const FRET_U = (k) => Math.pow(2, k / 12) - 1;
 export const FRET_V = (k) => 0.5 / (1 - Math.pow(2, -k / 12)) - 1;
 export const MEASURE_FRETS = [2, 7, 12];
-export const SCALE_PRESETS = [610, 628, 635, 648, 650];
+export const SCALE_PRESETS = [610, 628, 635, 645, 648, 650];
 const CENTS_PER_UNIT = 1200 / Math.LN2; // 1731.2
 
 /**

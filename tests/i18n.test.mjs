@@ -78,7 +78,7 @@ for (const [code, L] of Object.entries(LOCALES)) {
     for (const mode of MODES) {
       useLocale(L, mode);
       const rendered = [
-        ...Object.keys(L.ui).map((k) => t(k, { n: 2, string: stringName(1), note: 'A2', name: 'X', list: '0', tuning: 'X', notes: 'E A D G B E', offsets: '0', key: 'C', row: 'X', hz: '440', ord: '5th', k: 7, ok: 5, read: 6, tol: 1, value: '+0.5', date: '1/1', mm: '0.4', i: 1, dir: 'X', size: 'Y', advice: 'Z', label: 'L', c: '1.5', d: '+30' })),
+        ...Object.keys(L.ui).map((k) => t(k, { n: 2, string: stringName(1), note: 'A2', name: 'X', list: '0', tuning: 'X', notes: 'E A D G B E', offsets: '0', key: 'C', row: 'X', hz: '440', ord: '5th', k: 7, ok: 5, read: 6, tol: 1, value: '+0.5', date: '1/1', mm: '0.4', i: 1, dir: 'X', size: 'Y', advice: 'Z', label: 'L', c: '1.5', d: '+30', scale: 648, pct: '5', bass: '0.7', treble: '0.5', strings: '6', gauges: '12', set: 'S', from: '12-53', to: '11-52', g: '0.3' })),
         ...TUNINGS.map((x) => tuningName(x).text + tuningAbout(x)),
         ...SWEETENERS.map((x) => sweetenerAbout(x)),
         ...TEMPERAMENTS.map((x) => temperamentAbout(x)),

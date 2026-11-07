@@ -20,6 +20,8 @@ export const DEFAULTS = {
   bridge: null,               // measured coupling {q:[6], date, dj, drop10}
   cueVibrate: true,           // vibrate when a string becomes tuned
   cueSound: true,             // chime when a string becomes tuned
+  stringSetups: {},           // per guitar id (or 'default'): strings on, strings set up for, action, scale
+  stringsKey: 'default',      // which guitar the Strings section shows
   temperamentId: 'equal',
   temperamentRoot: 0,
   a4: 440,

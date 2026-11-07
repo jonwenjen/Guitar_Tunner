@@ -58,4 +58,7 @@ export const LEARN_REFS = [
   'griewank2010', 'anderson2015', 'tamm1990', 'weissman2006', 'jones2023', 'robson2023',
   'giordano2015', 'hinrichsen2012', 'jaatinen2022', 'plomp1965', 'sethares1994', 'stange2018', 'barbancho2012',
   'hodgkinson2010', 'polytune', 'polyPatent', 'mottola2017', 'mottola2018', 'hallhess1984', 'vos1986',
+  // String catalog (Sweeten → Strings): where each set's gauges and the tension check came from.
+  'stringsDaddarioEJ16', 'stringsDaddarioEJ11', 'stringsDaddario', 'stringsDaddarioEZ', 'stringsElixir', 'stringsElixir8020',
+  'stringsMartin', 'stringsErnieBall', 'stringsGibson', 'stringsDR',
 ];

@@ -146,6 +146,29 @@ A real guitar adds finger-pressure variation (Mottola 2018), so strum each barre
 
 **Diagnostics.** Strum checks and measurements can be exported as 16-bit WAV files that carry the app's per-strum readings as JSON in a standard LIST/INFO comment chunk, so real-guitar recordings can be used to tune the analysis.
 
+## 9. Strings: gauge, tension and intonation
+
+**Question.** A guitar is set up (neck relief, saddle position, action) for one string gauge. If other strings go on, how much does that move the intonation, and which strings should be used instead?
+
+**Catalog.** 30 acoustic sets from six makers — D'Addario (EJ15/26/16/17 phosphor bronze, EJ11 80/20, EZ900/910/920 85/15), Elixir (16002/16027/16052/16077/16102 phosphor bronze, 11002/11052/11182 80/20), Martin Authentic Acoustic SP (MA530/535/540/550), Ernie Ball Earthwood (2006/2004/2003/2002), Gibson phosphor bronze (Ultra-Light, Light, Medium) and DR Rare (RPL-10, RPML-11, RPM-12). Every gauge was checked against a maker or retailer page (sources in the reference list and in the app's Learn page); two sets remembered wrongly (EZ910, MA535) were corrected that way. Any other set can be typed in, with wound/plain per string and the alloy.
+
+**Tension.** T = μ(2Lf)², with the unit weight μ of a plain steel string from its diameter (ρ = 0.2836 lb/in³ × 0.996) and of a wound string from an effective density that falls with diameter (0.2565 − 0.85·max(0, d − 0.042) lb/in³, scaled by alloy: 80/20 × 0.985, 85/15 × 0.995). Fitted to D'Addario's published tensions, the model reproduces EJ16 (12-53 phosphor bronze, 25.5″) within 0.5 % per string — 23.4, 23.3, 30.0, 30.0, 29.0 and 24.9 lb from 1st to 6th — and EJ11 within 2.5 %.
+
+**What the gauge does to the 12th fret.** The saddle setback a string needs has two parts: bending stiffness, √(EI/T) with I from the core wire (core ≈ 0.0055″ + 0.225·d for wound strings), and the stretch from pressing the string down to the fret at action h, ≈ 2Rh²/L with R = EA<sub>core</sub>/2T (the two effects in Varieschi & Gower 2010). Each millimetre of setback is 1731/L cents at the 12th fret. Comparing sets on the same saddle at the same pitch and action:
+
+| Change (standard tuning, 648 mm, action 2.4 → 1.8 mm) | Total tension | Largest direct 12th-fret shift |
+|---|---|---|
+| EJ16 12-53 → EJ15 10-47 | −17 % | 0.55 ¢ |
+| EJ16 12-53 → EJ17 13-56 | +15 % | 0.27 ¢ |
+
+So the gauge itself moves the 12th fret by well under a cent — less than the same fretted note varies from one playing to the next (Mottola 2018). What does matter is the tension: 15–20 % more or less pull changes the neck relief and so the action, and the action changes intonation by about 0.6 ¢ per 0.1 mm on the 6th string (0.2–0.4 ¢ on the others); how far the relief moves depends on the neck. The app therefore reports: the tension difference from the setup set (per string and in total), the action sensitivity, the direct gauge shift (normally "too small to matter"), and the advice to check relief before touching the saddle.
+
+**Altered tunings.** Lowering strings lowers their tension: with EJ16, DADGAD loses 21 % on the 6th, 2nd and 1st strings (−9 % in total), Drop D 21 % on the 6th. The app keeps the setup set's tension in standard tuning as the target and ranks every set by the RMS of the log tension ratio in the tuning played; sets with the same gauges and alloy are listed together. For DADGAD from EJ16 the closest sets are 13-53 HD Light (−5 %), 13-56 80/20 and 13-56 phosphor bronze; for Drop D, 12-54. It also gives the single gauges that keep each string's tension exactly (DADGAD: .013 .018 .024 .032 .042 .060).
+
+**Using a measured guitar.** The guitar's measured 12th-fret error (the model's β term) is compared with the largest direct shift any change of strings could cause. When the error is much larger (the usual case: a few cents against under one), the cause is the saddle or the action, not the strings. When the strings on the guitar differ from those it was measured with, the shift and tension change are shown with a reminder to measure again. If the strings are unknown, the plain strings' measured stiffness gives their gauge (B ∝ d² for a plain string at fixed pitch and scale) and the nearest catalog set.
+
+**Not modelled.** Neck stiffness differs from guitar to guitar, so the app does not predict the change in relief from a tension change — it states the direction and the sensitivity. Brands' wound-string construction (core-to-wrap ratio, hex or round core) varies; the effective-density model is calibrated to D'Addario and is within a few percent for the others, which matters for tension totals but not for the advice.
+
 ## References
 
 - Anderson, H., Lin, K. W. E., Agus, N. & Lui, S. (2015). Major thirds: A better way to tune your iPad. *Proc. NIME 2015*, 365–368. <https://nime.org/proc/nime2015_klin/>
@@ -179,6 +202,7 @@ A real guitar adds finger-pressure variation (Mottola 2018), so strum each barre
 - Tatar, E. (1979). Slack key guitar. In G. S. Kanahele (ed.), *Hawaiian Music and Musicians*.
 - UMGF forum, "Tuner Sweetenings" (user measurements of Peterson presets, unofficial). <https://umgf.com/tuner-sweetenings-t75496.html>
 - U.S. Patent 9,076,416. Polyphonic tuner. <https://patents.google.com/patent/US9076416B2/en>
+- String gauge sources: D'Addario EJ16 (Sound Pure, with D'Addario tension data) <https://www.soundpure.com/p/daddario-ej16-light-12-53-guitar-strings/2210>; D'Addario EJ11 (Just Strings) <https://juststrings.com/dad_ej11.html>; D'Addario EJ26 (PMT) <https://www.pmtonline.co.uk/d-addario-ej26-bronze-acoustic-guitar-strings-custom-light-11-52>; D'Addario EZ920 (GAK) <https://www.gak.co.uk/en/daddario-great-american-bronze-85-15-ez920-12-54/63150>; Elixir phosphor bronze (zZounds) <https://zzounds.com/item--ELI16>; Elixir 11182 (Kirstein) <https://www.kirstein.de/Saiten-fuer-Westerngitarren/Elixir-11182-Acoustic-80-20-Bronze-Nanoweb-HD-Light.html>; Martin Authentic Acoustic SP (Forsyths) <https://www.forsyths.co.uk/guitars/accessories/guitar-strings/acoustic-guitar-strings/116406-martin-phosphor-bronze-authentic-acoustic-superior-performance-string-packs.html>; Ernie Ball Earthwood (zZounds) <https://www.zzounds.com/item--ERNEWBRAC>; Gibson phosphor bronze (gibson.com) <https://www.gibson.com/products/gibson-phosphor-bronze-acoustic-guitar-strings-medium-gauge>; DR Rare (zZounds) <https://www.zzounds.com/item--DRSRPML11?siid=31477>.
 - Varieschi, G. U. & Gower, C. M. (2010). Intonation and compensation of fretted string instruments. *American Journal of Physics* 78(1), 47–55. <https://arxiv.org/abs/0906.0127>
 - Villegas, J., Cohen, M., Wilson, I. & Martens, W. (2010). Influence of psychoacoustic roughness on musical intonation preference. *AES 128th Convention*, London. <https://u-aizu.ac.jp/~wilson/publications/VillegasEtAl2010AES.pdf>
 - Vos, J. (1986). Purity ratings of tempered fifths and major thirds. *Music Perception* 3(3), 221–257.

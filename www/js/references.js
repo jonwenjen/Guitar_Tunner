@@ -117,6 +117,46 @@ export const REFERENCES = {
     cite: 'U.S. Patent 9,076,416. Polyphonic tuner — selects partials so that harmonics shared by different strings do not confuse the reading.',
     url: 'https://patents.google.com/patent/US9076416B2/en',
   },
+  stringsDaddario: {
+    cite: "D'Addario EJ15, EJ17 and EJ26 phosphor bronze sets: gauges as listed by Strings By Mail (single-string components) and PMT (EJ26).",
+    url: 'https://www.pmtonline.co.uk/d-addario-ej26-bronze-acoustic-guitar-strings-custom-light-11-52',
+  },
+  stringsDaddarioEJ16: {
+    cite: "D'Addario EJ16 Phosphor Bronze Light 12-53: gauges and per-string tensions at 25.5″ (Sound Pure product page, from D'Addario's tension data).",
+    url: 'https://www.soundpure.com/p/daddario-ej16-light-12-53-guitar-strings/2210',
+  },
+  stringsDaddarioEJ11: {
+    cite: "D'Addario EJ11 80/20 Bronze Light 12-53: gauges and per-string tensions (Just Strings).",
+    url: 'https://juststrings.com/dad_ej11.html',
+  },
+  stringsDaddarioEZ: {
+    cite: "D'Addario EZ900, EZ910, EZ920 85/15 Bronze: gauges as listed by Long & McQuade, PMT and GAK.",
+    url: 'https://www.gak.co.uk/en/daddario-great-american-bronze-85-15-ez920-12-54/63150',
+  },
+  stringsElixir: {
+    cite: 'Elixir Phosphor Bronze Nanoweb 16002, 16027, 16052, 16077, 16102: gauges (zZounds product specifications).',
+    url: 'https://zzounds.com/item--ELI16',
+  },
+  stringsElixir8020: {
+    cite: 'Elixir 80/20 Bronze Nanoweb 11002, 11052, 11182: gauges (Kirstein product pages).',
+    url: 'https://www.kirstein.de/Saiten-fuer-Westerngitarren/Elixir-11182-Acoustic-80-20-Bronze-Nanoweb-HD-Light.html',
+  },
+  stringsMartin: {
+    cite: 'Martin Authentic Acoustic SP Phosphor Bronze MA530, MA535, MA540, MA550: gauges (Forsyths).',
+    url: 'https://www.forsyths.co.uk/guitars/accessories/guitar-strings/acoustic-guitar-strings/116406-martin-phosphor-bronze-authentic-acoustic-superior-performance-string-packs.html',
+  },
+  stringsErnieBall: {
+    cite: 'Ernie Ball Earthwood 80/20 Bronze 2002, 2003, 2004, 2006: gauges (zZounds product specifications).',
+    url: 'https://www.zzounds.com/item--ERNEWBRAC',
+  },
+  stringsGibson: {
+    cite: 'Gibson Phosphor Bronze acoustic strings, Ultra-Light, Light, Medium: gauges (gibson.com).',
+    url: 'https://www.gibson.com/products/gibson-phosphor-bronze-acoustic-guitar-strings-medium-gauge',
+  },
+  stringsDR: {
+    cite: 'DR Rare Phosphor Bronze RPL-10, RPML-11, RPM-12: gauges (zZounds product specifications).',
+    url: 'https://www.zzounds.com/item--DRSRPML11?siid=31477',
+  },
   petersonSC5000: {
     cite: 'Peterson Electro-Musical Products. Strobe Center 5000-II product page and SC-5000 instruction manual.',
     url: 'https://www.petersontuners.com/products/sc5000',
